@@ -6,7 +6,7 @@ import {
 // --- Firebase Imports (MUST use module path for React) ---
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
+  getAuth, signInAnonymously,  onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from 'firebase/auth';
 import {
   getFirestore, collection, query, onSnapshot,
@@ -31,7 +31,7 @@ const firebaseConfig = {
   measurementId: "G-4NBGX3Y9N9"
 };
 
-const initialAuthToken = null;
+//const initialAuthToken = null;
 
 /**
  * Utility function to format milliseconds into HH:MM:SS
@@ -823,7 +823,7 @@ const App = () => {
     setIsReportModalOpen(true);
   };
   
-  const handleShare = () => {
+  // const handleShare = () => {
     const newShareId = crypto.randomUUID();
     const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${newShareId}`;
     setShowShareLink(shareUrl);
