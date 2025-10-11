@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, signInAnonymously,  onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
+  getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from 'firebase/auth';
 import {
   getFirestore, collection, query, onSnapshot,
@@ -30,8 +30,6 @@ const firebaseConfig = {
   appId: "1:457573849083:web:9d758949a0b8781074dd5e",
   measurementId: "G-4NBGX3Y9N9"
 };
-
-//const initialAuthToken = null;
 
 /**
  * Utility function to format milliseconds into HH:MM:SS
@@ -59,15 +57,15 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onCancel}>
             <div 
-                className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
                 <h3 className="text-xl font-bold text-red-600 mb-3">{title}</h3>
-                <p className="text-gray-700 mb-6">{message}</p>
+                <p className="text-gray-700 dark:text-gray-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-3">
                     <button
                         onClick={onCancel}
-                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors active:scale-[0.98]"
+                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
@@ -87,25 +85,11 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
 
 
 /**
- * Modal for displaying the generated status report.
+ * Modal for displaying the generated status report prompt.
  */
-const ReportModal = ({ isOpen, onClose, reportData, isGenerating, ticketId, onGenerate, totalDurationMs }) => {
-    const [projectContext, setProjectContext] = useState('');
-
-    useEffect(() => {
-        if (!isOpen) {
-            setProjectContext('');
-        }
-    }, [isOpen]);
-
+const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     if (!isOpen) return null;
 
-    const handleGenerateClick = () => {
-        if (ticketId && totalDurationMs !== null) {
-            onGenerate(ticketId, totalDurationMs, projectContext);
-        }
-    };
-    
     const copyToClipboard = () => {
         if (reportData?.text) {
             const tempInput = document.createElement('textarea');
@@ -117,92 +101,93 @@ const ReportModal = ({ isOpen, onClose, reportData, isGenerating, ticketId, onGe
         }
     };
 
-    const renderContent = () => {
-        if (isGenerating) {
-            return (
-                <div className="flex flex-col items-center justify-center h-60 bg-indigo-50 rounded-xl">
-                    <Loader className="h-8 w-8 text-indigo-600 animate-spin" />
-                    <p className="mt-3 text-indigo-700 font-medium">Generating personalized summary...</p>
-                </div>
-            );
-        }
-
-        if (reportData) {
-            return (
-                <>
-                    <div className="p-4 bg-gray-100 rounded-xl border border-gray-300">
-                        <p className="text-gray-800 whitespace-pre-wrap">{reportData.text}</p>
-                    </div>
-                    {reportData.sources && reportData.sources.length > 0 && (
-                        <div className="mt-4 pt-2 border-t border-gray-200">
-                            <p className="text-xs font-semibold text-gray-500 mb-1">Sources:</p>
-                            <ul className="list-disc list-inside text-xs text-gray-500 space-y-0.5">
-                                {reportData.sources.map((source, index) => (
-                                    <li key={index} className="truncate">
-                                        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-indigo-500">
-                                            {source.title}
-                                        </a>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    <div className="mt-4 flex justify-between items-center">
-                        <button
-                            onClick={copyToClipboard}
-                            disabled={!reportData.text}
-                            className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50"
-                        >
-                            <Clipboard className="w-4 h-4" />
-                            <span>Copy to Clipboard</span>
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors active:scale-[0.98]"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </>
-            );
-        }
-
-        return (
-            <div className="space-y-4">
-                 <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">Project Context (Optional)</label>
-                    <textarea
-                        value={projectContext}
-                        onChange={(e) => setProjectContext(e.target.value)}
-                        placeholder="e.g., E-commerce platform migration"
-                        rows="3"
-                        className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                    />
-                </div>
-                <div className="flex justify-end pt-2">
-                    <button
-                        onClick={handleGenerateClick}
-                        className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
-                    >
-                         <span role="img" aria-label="sparkles">✨</span>
-                         <span>Generate Draft</span>
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
             <div 
-                className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-bold text-indigo-600 mb-1 flex items-center">
-                    <Send className="w-6 h-6 mr-2"/> Status Update for {ticketId}
+                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                    <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
                 </h3>
-                <p className="text-gray-500 mb-6 text-sm">Add optional details to personalize the draft generated by Gemini.</p>
-                {renderContent()}
+                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Copy this prompt and paste it into your preferred AI chat application.</p>
+                
+                <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
+                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
+                </div>
+                <div className="mt-6 flex justify-between items-center">
+                    <button
+                        onClick={copyToClipboard}
+                        disabled={!reportData?.text}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50"
+                    >
+                        <Clipboard className="w-4 h-4" />
+                        <span>Copy to Clipboard</span>
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const InstructionsContent = () => (
+    <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+        <div>
+            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Core Features:</h4>
+            <ul className="list-disc list-inside space-y-1">
+                <li><strong>Start/Stop Timer:</strong> Enter a ticket ID and hit 'START'. The timer will run until you PAUSE or STOP.</li>
+                <li><strong>Session Notes:</strong> Add notes to your running session. They are saved when you pause or stop.</li>
+                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed) or date.</li>
+                <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' to archive them, or 'Re-open' them if you need to track more time.</li>
+                <li><strong>Export Data:</strong> Export all logs, filtered logs, or selected logs to a CSV file.</li>
+            </ul>
+        </div>
+        <div>
+            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts:</h4>
+            <ul className="list-disc list-inside space-y-1">
+                <li>Click the "✨ Draft Status" button on any ticket in your history.</li>
+                <li>An AI-ready prompt is created for you, using your time logs and notes.</li>
+                <li>Simply copy this prompt and paste it into your favorite AI chat tool to generate a professional status update.</li>
+            </ul>
+        </div>
+         <div>
+            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Keyboard Shortcuts:</h4>
+             <ul className="list-disc list-inside space-y-1">
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume timer.</li>
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt + Enter</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Enter</span>: Stop and finalize the current entry.</li>
+            </ul>
+        </div>
+    </div>
+);
+
+const WelcomeModal = ({ isOpen, onClose }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Welcome to TickTackToto!</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">Here’s a quick guide to get you started:</p>
+                
+                <InstructionsContent />
+
+                <div className="mt-8 flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
+                    >
+                        Get Started
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -223,7 +208,6 @@ const App = () => {
   
   // --- Sharing State ---
   const [shareId, setShareId] = useState(null);
-  const [showShareLink, setShowShareLink] = useState('');
 
   // --- App State ---
   const [logs, setLogs] = useState([]);
@@ -248,12 +232,11 @@ const App = () => {
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [logToDeleteId, setLogToDeleteId] = useState(null);
-
-  // --- Gemini State ---
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState(null);
   const [reportingTicketInfo, setReportingTicketInfo] = useState(null); 
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
 
   // --- Theme State ---
@@ -266,6 +249,15 @@ const App = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Check for first visit to show welcome message
+  useEffect(() => {
+    const hasVisited = localStorage.getItem('hasVisitedTimeTracker');
+    if (!hasVisited) {
+        setShowWelcome(true);
+        localStorage.setItem('hasVisitedTimeTracker', 'true');
+    }
+  }, []);
   
   // --- Check for Share ID in URL on initial load ---
   useEffect(() => {
@@ -818,88 +810,38 @@ const App = () => {
   };
   
   const handleOpenReportModal = (ticketId, totalDurationMs) => {
+    const allNotes = filteredAndGroupedLogs
+        .find(g => g.ticketId === ticketId)?.sessions
+        .map(s => s.note.trim())
+        .filter(Boolean)
+        .map(note => `- ${note}`)
+        .join('\n') || 'No detailed notes were recorded.';
+
+    const formattedTime = formatTime(totalDurationMs);
+    
+    const finalPrompt = `
+You are a professional assistant. Your task is to write a concise, professional status update.
+
+**Task Details:**
+- **Persona:** Write from the perspective of a "${userTitle || 'Team Member'}".
+- **Topic:** Status update for ticket "${ticketId}".
+- **Output Format:** A single, professional paragraph.
+
+**Information to Use:**
+- **Total Time Logged:** ${formattedTime}
+- **Session Notes:**
+${allNotes}
+
+**Instructions & Constraints:**
+- Base the summary *only* on the information provided above.
+- Do not invent new details or predict future steps.
+- The tone should be factual and to the point.
+`;
+
     setReportingTicketInfo({ ticketId, totalDurationMs });
-    setGeneratedReport(null);
+    setGeneratedReport({ text: finalPrompt.trim(), sources: [] });
     setIsReportModalOpen(true);
   };
-  
-  // const handleShare = () => {
-    const newShareId = crypto.randomUUID();
-    const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${newShareId}`;
-    setShowShareLink(shareUrl);
-    navigator.clipboard.writeText(shareUrl);
-  };
-
-
-  const handleGenerateReport = useCallback(async (ticketId, totalDurationMs, projectContext) => {
-    setIsGenerating(true);
-
-    const apiKey = firebaseConfig.apiKey; 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-    
-    const formattedTime = formatTime(totalDurationMs);
-    const allNotes = filteredAndGroupedLogs.find(g => g.ticketId === ticketId)?.sessions.map(s => s.note).filter(Boolean).join('; ') || '';
-    
-    let userQuery = `As a person with the title "${userTitle || 'team member'}", write a concise, professional status update about work on ticket **${ticketId}**. Your perspective should reflect this role.`;
-    if (projectContext) {
-        userQuery += ` This ticket is part of a project with the context: "${projectContext}".`;
-    }
-    userQuery += ` The total recorded time is ${formattedTime}.`;
-    if (allNotes) {
-        userQuery += ` Use these session notes as a basis: "${allNotes}".`;
-    }
-    userQuery += ` The report must concisely summarize the progress based *only* on the information provided. It should be professional, factual, and to the point. The response must be a single paragraph.`;
-
-    const systemPrompt = `You are a professional assistant drafting a status update. Your tone and perspective must align with the user's provided title: "${userTitle || 'team member'}". The summary must be brief, clear, and based strictly on the user's provided notes and time log. Do not add any information or next steps that are not explicitly mentioned in the notes.`;
-
-    const payload = {
-        contents: [{ parts: [{ text: userQuery }] }],
-        tools: [{ "google_search": {} }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-    };
-
-    const maxRetries = 3;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                if (response.status === 429 && attempt < maxRetries) {
-                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    continue;
-                }
-                throw new Error(`API response status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            const candidate = result.candidates?.[0];
-            const text = candidate?.content?.parts?.[0]?.text || "Failed to generate report text.";
-            
-            let sources = [];
-            const groundingMetadata = candidate?.groundingMetadata;
-            if (groundingMetadata?.groundingAttributions) {
-                sources = groundingMetadata.groundingAttributions
-                    .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
-                    .filter(s => s.uri && s.title);
-            }
-            
-            setGeneratedReport({ text, sources });
-            setIsGenerating(false);
-            return;
-        } catch (error) {
-            console.error(`Gemini API call attempt ${attempt} failed:`, error);
-            if (attempt === maxRetries) {
-                setGeneratedReport({ text: `Error generating report: ${error.message}` });
-            }
-        }
-    }
-    setIsGenerating(false);
-  }, [filteredAndGroupedLogs, userTitle]);
   
   const isReady = isAuthReady && userId && db;
   const pausedTicketId = isTimerPaused ? activeLogData?.ticketId : '';
@@ -990,6 +932,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+      <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <ConfirmationModal
         isOpen={isConfirmingDelete}
         title="Confirm Deletion"
@@ -1001,31 +944,57 @@ const App = () => {
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
           reportData={generatedReport}
-          isGenerating={isGenerating}
           ticketId={reportingTicketInfo?.ticketId}
-          totalDurationMs={reportingTicketInfo?.totalDurationMs}
-          onGenerate={handleGenerateReport}
       />
 
       <div className="max-w-xl mx-auto py-8">
-        <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center space-x-3">
-                {user && !user.isAnonymous ? (
-                    <>
-                        <img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-indigo-500"/>
-                        <div>
-                            <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
-                            <button onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button>
+        <div className="flex justify-between items-start mb-8">
+            <div className="relative">
+                <div className="flex flex-col space-y-3">
+                    <div className="flex items-center space-x-3">
+                        {user && !user.isAnonymous ? (
+                            <>
+                                <img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-indigo-500"/>
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
+                                    <button onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button>
+                                </div>
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleGoogleLogin}
+                                className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+                            >
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" className="w-5 h-5"/>
+                                <span>Sign in with Google</span>
+                            </button>
+                        )}
+                    </div>
+                    <div>
+                        <button 
+                            onClick={() => setShowInstructions(!showInstructions)}
+                            className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
+                            <Info className="w-4 h-4" />
+                            <span>{showInstructions ? 'Hide' : 'Show'} Instructions</span>
+                        </button>
+                    </div>
+                </div>
+
+                {showInstructions && (
+                    <section className="absolute z-10 top-full mt-2 w-96 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
+                        <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">How to Use This Tracker</h3>
+                        <InstructionsContent />
+                        <div className="mt-6 text-center">
+                            <button
+                                onClick={() => setShowInstructions(false)}
+                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                                <span>Hide Instructions</span>
+                            </button>
                         </div>
-                    </>
-                ) : (
-                     <button
-                        onClick={handleGoogleLogin}
-                        className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
-                    >
-                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" className="w-5 h-5"/>
-                        <span>Sign in with Google</span>
-                    </button>
+                    </section>
                 )}
             </div>
             <div className="flex items-center space-x-2">
@@ -1038,19 +1007,11 @@ const App = () => {
             </div>
         </div>
 
-
         <header className="text-center mb-10">
-          <div className="flex justify-center items-center mb-2">
-            <h1 className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">Ticket Time Tracker</h1>
+          <div className="flex flex-col justify-center items-center mb-2">
+            <h1 className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">TickTackToto</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">the slick ticket time tracker</p>
           </div>
-          <p className="text-gray-500 dark:text-gray-400">Log your hours with a single tap.</p>
-          
-           {showShareLink && (
-            <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg shadow-sm">
-                <p className="text-sm font-semibold text-green-800">Shareable Link (Copied!)</p>
-                <input type="text" readOnly value={showShareLink} className="w-full p-1 mt-1 text-xs bg-white border border-gray-300 rounded font-mono break-all"/>
-            </div>
-           )}
         </header>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
@@ -1068,7 +1029,7 @@ const App = () => {
                     placeholder="e.g., Senior Software Engineer"
                     className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                 />
-                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be used to personalize your AI-generated status reports.</p>
+                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be used to personalize the AI-ready prompt for your status reports.</p>
             </div>
         </section>
 
@@ -1115,16 +1076,16 @@ const App = () => {
           <div className="flex space-x-3">
             <button
               onClick={actionHandler}
-              disabled={isButtonDisabled || isLoading || isGenerating}
-              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${(isButtonDisabled || isLoading || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isButtonDisabled || isLoading}
+              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${(isButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {(isLoading && (isTimerRunning || isTimerPaused)) ? <Loader className="h-5 w-5 animate-spin" /> : (<><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></>)}
             </button>
             <button
               onClick={() => stopTimer(false)}
-              disabled={isStopButtonDisabled || isLoading || isGenerating}
+              disabled={isStopButtonDisabled || isLoading}
               title="Stop and Finalize Activity"
-              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${(isStopButtonDisabled || isLoading || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${(isStopButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {isLoading && !(isTimerRunning || isTimerPaused) ? <Loader className="h-6 w-6 animate-spin" /> : <Square className="h-6 w-6" />}
             </button>
@@ -1172,7 +1133,7 @@ const App = () => {
                         setExportOption(val);
                         handleExport(val);
                     }}
-                    disabled={isLoading || isGenerating}
+                    disabled={isLoading}
                     className="pl-3 pr-8 py-2 bg-green-500 text-white font-semibold text-sm rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
                 >
                     <option value="" disabled>Export CSV...</option>
@@ -1218,22 +1179,22 @@ const App = () => {
                         </div>
                     </div>
                   <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
-                    <button onClick={() => handleOpenReportModal(group.ticketId, group.totalDurationMs)} disabled={isLoading || isGenerating} className="flex items-center justify-center space-x-1 px-3 py-1 bg-fuchsia-600 text-white font-semibold text-xs rounded-lg hover:bg-fuchsia-700 transition-colors active:scale-[0.98] disabled:opacity-50 shadow-md" title="Draft Status Update using Gemini and Notes">
+                    <button onClick={() => handleOpenReportModal(group.ticketId, group.totalDurationMs)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-fuchsia-600 text-white font-semibold text-xs rounded-lg hover:bg-fuchsia-700 transition-colors active:scale-[0.98] disabled:opacity-50 shadow-md" title="Draft Status Update using Gemini and Notes">
                         <span role="img" aria-label="sparkles">✨</span><span>Draft Status</span>
                     </button>
                     {group.isClosed ? (
                         <>
-                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-                            <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading || isGenerating} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
-                                <Repeat className="h-4 w-4" /><span>Re-open Ticket</span>
+                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="w-4 h-4" /><span>Closed</span></span>
+                            <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
+                                <Repeat className="w-4 h-4" /><span>Re-open Ticket</span>
                             </button>
                         </>
                     ) : (
                         <>
-                            <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading || isGenerating} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="h-4 w-4" /><span>Close Ticket</span>
+                            <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
+                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading || isGenerating} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
+                            <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
                                 <Repeat className="h-4 w-4" /><span>Start New Session</span>
                             </button>
                         </>
@@ -1246,7 +1207,7 @@ const App = () => {
                             <div className="flex justify-between items-center">
                                 <span className="font-mono font-bold text-sm text-gray-800 dark:text-gray-200 flex-shrink-0 mr-4">{formatTime(session.accumulatedMs)}</span>
                                 <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                <button onClick={() => handleDeleteClick(session.id)} disabled={isLoading || isGenerating} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                <button onClick={() => handleDeleteClick(session.id)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
                                     <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
