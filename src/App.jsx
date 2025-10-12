@@ -1431,27 +1431,27 @@ ${combinedReport.trim()}
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
-            <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch gap-2">
+            <div className="flex items-center gap-2">
                 {statusFilter === 'Submitted' ? (
                   <button 
                     onClick={handleMarkAsUnsubmitted}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto pl-3 pr-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 pl-3 pr-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
                   >
                     <Repeat className="h-4 w-4" />
-                    <span>Mark as Un-submitted</span>
+                    <span>Unsubmit</span>
                   </button>
                 ) : (
                   <button 
                     onClick={handleCreateDraft}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto pl-3 pr-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 pl-3 pr-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                   >
                     <FileSignature className="h-4 w-4" />
                     <span>Create Draft</span>
                   </button>
                 )}
-                <div className="relative w-full sm:w-auto">
+                <div className="relative">
                     <select
                         value={exportOption}
                         onChange={(e) => {
@@ -1460,7 +1460,7 @@ ${combinedReport.trim()}
                             handleExport(val);
                         }}
                         disabled={isLoading}
-                        className="w-full pl-3 pr-8 py-2 bg-green-500 text-white font-semibold text-sm rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        className="pl-3 pr-8 py-2 bg-green-500 text-white font-semibold text-sm rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
                     >
                         <option value="" disabled>Export CSV...</option>
                         <option value="selected" disabled={isActionDisabled}>Export Selected</option>
