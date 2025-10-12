@@ -1355,7 +1355,7 @@ ${combinedReport.trim()}
             className={`w-full p-3 mb-4 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
           />
           {isInputTicketClosed && (
-              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is permanently closed.</p>
+              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
           {(isTimerRunning || isTimerPaused) && (
@@ -1608,5 +1608,6 @@ ${combinedReport.trim()}
 };
 
 export default App;
+
 
 
