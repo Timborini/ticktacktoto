@@ -224,7 +224,7 @@ const InstructionsContent = () => (
         <div>
             <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
             <ul className="list-disc list-inside space-y-1">
-                <li><strong>Multi-Ticket Draft:</strong> Select multiple tickets or sessions using the checkboxes, then click the "Create Draft" button at the top of the history section.</li>
+                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "Create Draft" button at the top of the history section.</li>
                 <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
                 <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
             </ul>
@@ -1112,40 +1112,6 @@ ${combinedReport.trim()}
           setSelectedTickets(prevSelected => new Set([...prevSelected, ...allVisibleTicketIds]));
       }
       setSelectedSessions(new Set()); // Clear individual session selections
-  };
-  
-  const handleOpenReportModal = (ticketId, totalDurationMs) => {
-    const allNotes = filteredAndGroupedLogs
-        .find(g => g.ticketId === ticketId)?.sessions
-        .map(s => s.note.trim())
-        .filter(Boolean)
-        .map(note => `- ${note}`)
-        .join('\n') || 'No detailed notes were recorded.';
-
-    const formattedTime = formatTime(totalDurationMs);
-    
-    const finalPrompt = `
-You are a professional assistant. Your task is to write a concise, professional status update.
-
-**Task Details:**
-- **Persona:** Write from the perspective of a "${userTitle || 'Team Member'}".
-- **Topic:** Status update for ticket "${ticketId}".
-- **Output Format:** A single, professional paragraph.
-
-**Information to Use:**
-- **Total Time Logged:** ${formattedTime}
-- **Session Notes:**
-${allNotes}
-
-**Instructions & Constraints:**
-- Base the summary *only* on the information provided above.
-- Do not invent new details or predict future steps.
-- The tone should be factual and to the point.
-`;
-
-    setReportingTicketInfo({ ticketId, totalDurationMs });
-    setGeneratedReport({ text: finalPrompt.trim(), sources: [] });
-    setIsReportModalOpen(true);
   };
   
   const isReady = isAuthReady && userId && db;
