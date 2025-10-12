@@ -224,7 +224,7 @@ const InstructionsContent = () => (
         <div>
             <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
             <ul className="list-disc list-inside space-y-1">
-                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "Create Draft" button at the top of the history section.</li>
+                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "AI Draft" button at the top of the history section.</li>
                 <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
                 <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
             </ul>
@@ -1429,26 +1429,24 @@ ${combinedReport.trim()}
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
+          <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
             <div className="flex items-center gap-2">
                 {statusFilter === 'Submitted' ? (
                   <button 
                     onClick={handleMarkAsUnsubmitted}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center justify-center gap-2 pl-3 pr-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
                   >
-                    <Repeat className="h-4 w-4" />
-                    <span>Unsubmit</span>
+                    Unsubmit
                   </button>
                 ) : (
                   <button 
                     onClick={handleCreateDraft}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center justify-center gap-2 pl-3 pr-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                   >
-                    <FileSignature className="h-4 w-4" />
-                    <span>Create Draft</span>
+                    AI Draft
                   </button>
                 )}
                 <div className="relative">
