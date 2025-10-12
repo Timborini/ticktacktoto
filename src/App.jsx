@@ -1550,7 +1550,7 @@ ${combinedReport.trim()}
                     ) : (
                         <>
                             <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="w-4 w-4" /><span>Close Ticket</span>
+                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
                             <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
                                 <Repeat className="w-4 w-4" /><span>Start New Session</span>
