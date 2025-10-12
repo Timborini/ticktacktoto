@@ -1436,7 +1436,7 @@ ${combinedReport.trim()}
                   <button 
                     onClick={handleMarkAsUnsubmitted}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center gap-2 pl-3 pr-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 pl-3 pr-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
                   >
                     <Repeat className="h-4 w-4" />
                     <span>Unsubmit</span>
@@ -1445,7 +1445,7 @@ ${combinedReport.trim()}
                   <button 
                     onClick={handleCreateDraft}
                     disabled={isActionDisabled || isLoading}
-                    className="flex items-center gap-2 pl-3 pr-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 pl-3 pr-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                   >
                     <FileSignature className="h-4 w-4" />
                     <span>Create Draft</span>
@@ -1460,15 +1460,16 @@ ${combinedReport.trim()}
                             handleExport(val);
                         }}
                         disabled={isLoading}
-                        className="pl-3 pr-8 py-2 bg-green-500 text-white font-semibold text-sm rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        aria-label="Export CSV"
                     >
                         <option value="" disabled>Export CSV...</option>
                         <option value="selected" disabled={isActionDisabled}>Export Selected</option>
                         <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
                         <option value="all" disabled={logs.length === 0}>Export All</option>
                     </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
-                        <Download className="h-4 w-4" />
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                        <Download className="h-5 w-5" />
                     </div>
                 </div>
             </div>
@@ -1551,7 +1552,7 @@ ${combinedReport.trim()}
                     ) : (
                         <>
                             <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
+                                <Lock className="w-4 w-4" /><span>Close Ticket</span>
                             </button>
                             <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
                                 <Repeat className="w-4 w-4" /><span>Start New Session</span>
