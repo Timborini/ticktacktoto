@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore, collection, query, onSnapshot,
-  doc, updateDoc, deleteDoc, addDoc
+  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
 import { setLogLevel } from 'firebase/firestore';
 
@@ -51,8 +51,10 @@ const formatTime = (ms) => {
 /**
  * Custom Confirmation Modal Component
  */
-const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
     if (!isOpen) return null;
+
+    const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onCancel}>
@@ -60,8 +62,8 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
                 className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-xl font-bold text-red-600 mb-3">{title}</h3>
-                <p className="text-gray-700 dark:text-gray-300 mb-6">{message}</p>
+                <h3 className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}>{title}</h3>
+                <div className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
                 <div className="flex justify-end space-x-3">
                     <button
                         onClick={onCancel}
@@ -72,10 +74,10 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
                     </button>
                     <button
                         onClick={onConfirm}
-                        className="flex items-center space-x-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors active:scale-[0.98]"
+                        className={`flex items-center space-x-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
                     >
                         <Check className="w-4 h-4" />
-                        <span>Delete</span>
+                        <span>{confirmText}</span>
                     </button>
                 </div>
             </div>
@@ -83,10 +85,79 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     );
 };
 
+const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm }) => {
+    const [newTicketId, setNewTicketId] = useState('');
 
-/**
- * Modal for displaying the generated status report prompt.
- */
+    useEffect(() => {
+        // Reset selection when modal opens or session changes
+        if (isOpen) {
+            setNewTicketId('');
+        }
+    }, [isOpen, sessionInfo]);
+
+    if (!isOpen || !sessionInfo) return null;
+
+    const handleConfirm = () => {
+        if (newTicketId && newTicketId !== sessionInfo.currentTicketId) {
+            onConfirm(sessionInfo.sessionId, newTicketId);
+        }
+    };
+
+    // Filter out the current ticket ID from the list of options
+    const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Reallocate Session</h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                    Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
+                </p>
+
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            New Ticket ID
+                        </label>
+                        <select
+                            id="ticket-reallocate"
+                            value={newTicketId}
+                            onChange={(e) => setNewTicketId(e.target.value)}
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                            <option value="" disabled>Select a ticket...</option>
+                            {availableTickets.map(ticketId => (
+                                <option key={ticketId} value={ticketId}>{ticketId}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                
+                <div className="mt-8 flex justify-end space-x-3">
+                    <button
+                        onClick={onClose}
+                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        <X className="w-4 h-4" />
+                        <span>Cancel</span>
+                    </button>
+                    <button
+                        onClick={handleConfirm}
+                        disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
+                        className="flex items-center space-x-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50"
+                    >
+                        <Check className="w-4 h-4" />
+                        <span>Confirm Reallocation</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     if (!isOpen) return null;
 
@@ -143,17 +214,19 @@ const InstructionsContent = () => (
             <ul className="list-disc list-inside space-y-1">
                 <li><strong>Start/Stop Timer:</strong> Enter a ticket ID and hit 'START'. The timer will run until you PAUSE or STOP.</li>
                 <li><strong>Session Notes:</strong> Add notes to your running session. They are saved when you pause or stop.</li>
-                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed) or date.</li>
+                <li><strong>Inline Ticket Editing:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1"/> icon next to a ticket ID to rename it across all its sessions.</li>
+                <li><strong>Session Reallocation:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1"/> icon on a session to move it to a different ticket.</li>
+                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed), date, or view 'Submitted' tickets.</li>
                 <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' to archive them, or 'Re-open' them if you need to track more time.</li>
                 <li><strong>Export Data:</strong> Export all logs, filtered logs, or selected logs to a CSV file.</li>
             </ul>
         </div>
         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts:</h4>
+            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
             <ul className="list-disc list-inside space-y-1">
-                <li>Click the "✨ Draft Status" button on any ticket in your history.</li>
-                <li>An AI-ready prompt is created for you, using your time logs and notes.</li>
-                <li>Simply copy this prompt and paste it into your favorite AI chat tool to generate a professional status update.</li>
+                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "AI Draft" button at the top of the history section.</li>
+                <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
+                <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
             </ul>
         </div>
          <div>
@@ -206,6 +279,10 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [firebaseError, setFirebaseError] = useState(null);
   
+  // --- Inline Editing State ---
+  const [editingTicketId, setEditingTicketId] = useState(null);
+  const [editingTicketValue, setEditingTicketValue] = useState('');
+
   // --- Sharing State ---
   const [shareId, setShareId] = useState(null);
 
@@ -226,17 +303,21 @@ const App = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
   const [selectedTickets, setSelectedTickets] = useState(new Set());
+  const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
 
 
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [logToDeleteId, setLogToDeleteId] = useState(null);
+  const [logToDelete, setLogToDelete] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [generatedReport, setGeneratedReport] = useState(null);
   const [reportingTicketInfo, setReportingTicketInfo] = useState(null); 
+  const [isReallocateModalOpen, setIsReallocateModalOpen] = useState(false);
+  const [reallocatingSessionInfo, setReallocatingSessionInfo] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [isConfirmingSubmit, setIsConfirmingSubmit] = useState(false);
 
 
   // --- Theme State ---
@@ -390,6 +471,7 @@ const App = () => {
           endTime: data.endTime || null, 
           accumulatedMs: data.accumulatedMs || 0,
           note: data.note || '',
+          status: data.status || 'unsubmitted' // Add status field
         };
 
         if (log.endTime === null) {
@@ -460,6 +542,7 @@ const App = () => {
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
     setSelectedTickets(new Set());
+    setSelectedSessions(new Set());
   }, [statusFilter, dateFilter]);
   
   // --- Derived State: Grouped Logs and Totals ---
@@ -488,13 +571,23 @@ const App = () => {
       return acc;
     }, {});
 
-    const groupedArray = Object.values(groups);
+    let groupedArray = Object.values(groups);
+
+    // Filter by 'submitted' status
+    if (statusFilter !== 'Submitted') {
+        groupedArray = groupedArray.filter(group => 
+            group.sessions.some(session => session.status !== 'submitted')
+        );
+    }
 
     const statusFilteredGroups = statusFilter === 'All'
       ? groupedArray
       : groupedArray.filter(group => {
           if (statusFilter === 'Open') return !group.isClosed;
           if (statusFilter === 'Closed') return group.isClosed;
+          if (statusFilter === 'Submitted') {
+            return group.sessions.every(s => s.status === 'submitted');
+          }
           return true;
         });
 
@@ -511,6 +604,12 @@ const App = () => {
   const totalFilteredTimeMs = useMemo(() => {
     return filteredAndGroupedLogs.reduce((total, group) => total + group.totalDurationMs, 0);
   }, [filteredAndGroupedLogs]);
+
+  const allTicketIds = useMemo(() => {
+    const ids = new Set(logs.map(log => log.ticketId));
+    if (currentTicketId) ids.add(currentTicketId);
+    return Array.from(ids).sort();
+  }, [logs, currentTicketId]);
 
   // --- Core Timer Functions ---
 
@@ -558,6 +657,7 @@ const App = () => {
         startTime: null,
         accumulatedMs: finalAccumulatedMs,
         note: currentNote.trim(),
+        status: 'unsubmitted' // Ensure new logs are unsubmitted
       });
       
       if (!isAutoOverride) {
@@ -584,6 +684,7 @@ const App = () => {
             endTime: null,
             accumulatedMs: 0,
             note: note.trim(),
+            status: 'unsubmitted' // Default status
         };
         await addDoc(getCollectionRef, newEntry);
     } catch (error) {
@@ -683,33 +784,212 @@ const App = () => {
     }
   }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
 
-  const handleDeleteClick = useCallback((logId) => {
-    setLogToDeleteId(logId);
+  const handleDeleteClick = useCallback((session) => {
+    setLogToDelete(session);
     setIsConfirmingDelete(true);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!logToDeleteId || !getCollectionRef) return;
+    if (!logToDelete || !getCollectionRef) return;
     
     setIsConfirmingDelete(false);
     setIsLoading(true);
 
     try {
-        await deleteDoc(doc(getCollectionRef, logToDeleteId));
+        await deleteDoc(doc(getCollectionRef, logToDelete.id));
     } catch (error) {
         console.error('Error deleting log:', error);
         setFirebaseError('Failed to delete log entry.');
     } finally {
-        setLogToDeleteId(null);
+        setLogToDelete(null);
         setIsLoading(false);
     }
-  }, [logToDeleteId, getCollectionRef]);
+  }, [logToDelete, getCollectionRef]);
 
   const handleCancelDelete = useCallback(() => {
     setIsConfirmingDelete(false);
-    setLogToDeleteId(null);
+    setLogToDelete(null);
   }, []);
   
+  const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
+    if (!sessionId || !newTicketId || !getCollectionRef) return;
+
+    setIsLoading(true);
+    try {
+        const sessionRef = doc(getCollectionRef, sessionId);
+        await updateDoc(sessionRef, { ticketId: newTicketId });
+    } catch (error) {
+        console.error("Error reallocating session:", error);
+        setFirebaseError("Failed to reallocate session.");
+    } finally {
+        setIsReallocateModalOpen(false);
+        setReallocatingSessionInfo(null);
+        setIsLoading(false);
+    }
+  }, [getCollectionRef]);
+
+  const handleUpdateTicketId = useCallback(async (oldTicketId, newTicketId) => {
+    if (!newTicketId || oldTicketId === newTicketId || !getCollectionRef || !getTicketStatusCollectionRef) {
+      setEditingTicketId(null);
+      return;
+    }
+    
+    setIsLoading(true);
+    const batch = writeBatch(db);
+
+    try {
+      // 1. Update all session documents
+      const sessionsQuery = query(getCollectionRef, where("ticketId", "==", oldTicketId));
+      const sessionSnapshots = await getDocs(sessionsQuery);
+      sessionSnapshots.forEach((doc) => {
+        batch.update(doc.ref, { ticketId: newTicketId });
+      });
+
+      // 2. Update the corresponding status document
+      const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", oldTicketId));
+      const statusSnapshots = await getDocs(statusQuery);
+      statusSnapshots.forEach((doc) => {
+        batch.update(doc.ref, { ticketId: newTicketId });
+      });
+
+      await batch.commit();
+
+    } catch (error) {
+      console.error("Error updating ticket ID:", error);
+      setFirebaseError("Failed to update ticket ID. Please check the console.");
+    } finally {
+      setEditingTicketId(null);
+      setEditingTicketValue('');
+      setIsLoading(false);
+    }
+  }, [getCollectionRef, getTicketStatusCollectionRef, db]);
+
+  const handleMarkAsSubmitted = useCallback(async () => {
+    const finalSessionIds = new Set(selectedSessions);
+    selectedTickets.forEach(ticketId => {
+        logs.forEach(log => {
+            if (log.ticketId === ticketId) {
+                finalSessionIds.add(log.id);
+            }
+        });
+    });
+
+    if (finalSessionIds.size === 0 || !getCollectionRef) return;
+
+    setIsLoading(true);
+    const batch = writeBatch(db);
+
+    try {
+        finalSessionIds.forEach(sessionId => {
+            const docRef = doc(getCollectionRef, sessionId);
+            batch.update(docRef, { status: 'submitted' });
+        });
+        await batch.commit();
+        setSelectedTickets(new Set()); // Clear selections
+        setSelectedSessions(new Set());
+    } catch (error) {
+        console.error("Error marking sessions as submitted:", error);
+        setFirebaseError("Failed to mark sessions as submitted.");
+    } finally {
+        setIsLoading(false);
+        setIsConfirmingSubmit(false);
+    }
+}, [selectedTickets, selectedSessions, logs, getCollectionRef, db]);
+
+  const handleMarkAsUnsubmitted = useCallback(async () => {
+    const finalSessionIds = new Set(selectedSessions);
+    selectedTickets.forEach(ticketId => {
+        logs.forEach(log => {
+            if (log.ticketId === ticketId) {
+                finalSessionIds.add(log.id);
+            }
+        });
+    });
+
+    if (finalSessionIds.size === 0 || !getCollectionRef) return;
+
+    setIsLoading(true);
+    const batch = writeBatch(db);
+
+    try {
+        finalSessionIds.forEach(sessionId => {
+            const docRef = doc(getCollectionRef, sessionId);
+            batch.update(docRef, { status: 'unsubmitted' });
+        });
+        await batch.commit();
+        setSelectedTickets(new Set()); // Clear selections
+        setSelectedSessions(new Set());
+    } catch (error) {
+        console.error("Error marking sessions as unsubmitted:", error);
+        setFirebaseError("Failed to mark sessions as unsubmitted.");
+    } finally {
+        setIsLoading(false);
+    }
+  }, [selectedTickets, selectedSessions, logs, getCollectionRef, db]);
+
+  const handleCreateDraft = () => {
+    const finalTicketIds = new Set(selectedTickets);
+    selectedSessions.forEach(sessionId => {
+        const log = logs.find(l => l.id === sessionId);
+        if (log) {
+            finalTicketIds.add(log.ticketId);
+        }
+    });
+
+    if (finalTicketIds.size === 0) return;
+
+    let combinedReport = "";
+    let totalTime = 0;
+
+    finalTicketIds.forEach(ticketId => {
+        const group = filteredAndGroupedLogs.find(g => g.ticketId === ticketId);
+        if (group) {
+            const allNotes = group.sessions
+                .map(s => s.note.trim())
+                .filter(Boolean)
+                .map(note => `- ${note}`)
+                .join('\n') || 'No detailed notes were recorded.';
+            
+            totalTime += group.totalDurationMs;
+
+            combinedReport += `
+---
+**Ticket:** ${ticketId}
+**Time Logged:** ${formatTime(group.totalDurationMs)}
+**Session Notes:**
+${allNotes}
+---
+`;
+        }
+    });
+
+    const finalPrompt = `
+You are a professional assistant. Your task is to write a concise, professional status update summarizing the work across multiple tickets.
+
+**Task Details:**
+- **Persona:** Write from the perspective of a "${userTitle || 'Team Member'}".
+- **Topic:** Status update for ${finalTicketIds.size} ticket(s).
+- **Output Format:** A single, professional paragraph.
+
+**Information to Use:**
+- **Total Combined Time Logged:** ${formatTime(totalTime)}
+- **Ticket Summaries:**
+${combinedReport.trim()}
+
+**Instructions & Constraints:**
+- Synthesize the information from all tickets into a cohesive summary.
+- Base the summary *only* on the information provided above.
+- Do not invent new details or predict future steps.
+- The tone should be factual and to the point.
+`;
+    
+    const draftTitle = finalTicketIds.size === 1 ? [...finalTicketIds][0] : `${finalTicketIds.size} Tickets`;
+    setReportingTicketInfo({ ticketId: draftTitle, totalDurationMs: null });
+    setGeneratedReport({ text: finalPrompt.trim() });
+    setIsReportModalOpen(true);
+  };
+
+
   const handleExport = useCallback((exportType) => {
     if (!exportType) return;
 
@@ -718,15 +998,27 @@ const App = () => {
 
     switch (exportType) {
       case 'selected':
-        if (selectedTickets.size === 0) {
-          console.log('Export skipped: No tickets selected.');
+        if (selectedTickets.size === 0 && selectedSessions.size === 0) {
+          console.log('Export skipped: No items selected.');
           setExportOption('');
           return;
         }
-        logsToExport = logs.filter(log => selectedTickets.has(log.ticketId) && log.endTime);
-        reportName = selectedTickets.size === 1
-          ? [...selectedTickets][0].replace(/[^a-z0-9]/gi, '_').toLowerCase()
-          : 'selected-report';
+        
+        const finalSelectedSessions = new Set();
+        selectedSessions.forEach(sessionId => {
+            const log = logs.find(l => l.id === sessionId);
+            if (log) finalSelectedSessions.add(log);
+        });
+        selectedTickets.forEach(ticketId => {
+            logs.forEach(log => {
+                if (log.ticketId === ticketId && log.endTime) {
+                    finalSelectedSessions.add(log);
+                }
+            });
+        });
+        logsToExport = Array.from(finalSelectedSessions);
+
+        reportName = 'selected-report';
         break;
 
       case 'filtered':
@@ -756,12 +1048,12 @@ const App = () => {
     const filename = `${reportName}-${today}.csv`;
 
     try {
-      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Duration (ms)", "Note", "Finished Date/Time", "Session ID"];
+      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Duration (ms)", "Note", "Finished Date/Time", "Session ID", "Status"];
       const csvRows = logsToExport.map(log => {
         const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
         const formattedDuration = formatTime(log.accumulatedMs);
         const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-        return [escape(log.ticketId), escape(formattedDuration), log.accumulatedMs, escape(log.note || ''), escape(finishTime), escape(log.id)].join(',');
+        return [escape(log.ticketId), escape(formattedDuration), log.accumulatedMs, escape(log.note || ''), escape(finishTime), escape(log.id), escape(log.status)].join(',');
       });
 
       const csvContent = [headers.join(','), ...csvRows].join('\n');
@@ -780,7 +1072,7 @@ const App = () => {
     } finally {
       setExportOption('');
     }
-  }, [logs, selectedTickets, filteredAndGroupedLogs]);
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs]);
 
   const handleToggleSelectTicket = (ticketId) => {
     setSelectedTickets(prevSelected => {
@@ -789,6 +1081,18 @@ const App = () => {
             newSelected.delete(ticketId);
         } else {
             newSelected.add(ticketId);
+        }
+        return newSelected;
+    });
+  };
+
+  const handleToggleSelectSession = (sessionId) => {
+    setSelectedSessions(prevSelected => {
+        const newSelected = new Set(prevSelected);
+        if (newSelected.has(sessionId)) {
+            newSelected.delete(sessionId);
+        } else {
+            newSelected.add(sessionId);
         }
         return newSelected;
     });
@@ -807,40 +1111,7 @@ const App = () => {
       } else {
           setSelectedTickets(prevSelected => new Set([...prevSelected, ...allVisibleTicketIds]));
       }
-  };
-  
-  const handleOpenReportModal = (ticketId, totalDurationMs) => {
-    const allNotes = filteredAndGroupedLogs
-        .find(g => g.ticketId === ticketId)?.sessions
-        .map(s => s.note.trim())
-        .filter(Boolean)
-        .map(note => `- ${note}`)
-        .join('\n') || 'No detailed notes were recorded.';
-
-    const formattedTime = formatTime(totalDurationMs);
-    
-    const finalPrompt = `
-You are a professional assistant. Your task is to write a concise, professional status update.
-
-**Task Details:**
-- **Persona:** Write from the perspective of a "${userTitle || 'Team Member'}".
-- **Topic:** Status update for ticket "${ticketId}".
-- **Output Format:** A single, professional paragraph.
-
-**Information to Use:**
-- **Total Time Logged:** ${formattedTime}
-- **Session Notes:**
-${allNotes}
-
-**Instructions & Constraints:**
-- Base the summary *only* on the information provided above.
-- Do not invent new details or predict future steps.
-- The tone should be factual and to the point.
-`;
-
-    setReportingTicketInfo({ ticketId, totalDurationMs });
-    setGeneratedReport({ text: finalPrompt.trim(), sources: [] });
-    setIsReportModalOpen(true);
+      setSelectedSessions(new Set()); // Clear individual session selections
   };
   
   const isReady = isAuthReady && userId && db;
@@ -875,6 +1146,7 @@ ${allNotes}
   const isInputDisabled = isTimerRunning || !isReady; 
   const isButtonDisabled = !isReady || (isInputTicketClosed && !isTimerPaused && !isTimerRunning) || (currentTicketId.trim() === '' && !isTimerRunning && !isTimerPaused);
   const isStopButtonDisabled = !isTimerRunning && !isTimerPaused;
+  const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -907,6 +1179,18 @@ ${allNotes}
 
 
   // --- Render Logic ---
+  let deleteMessage = null;
+  if (logToDelete) {
+      deleteMessage = (
+          <div>
+              <p>Are you sure you want to delete this session for ticket <strong>{logToDelete.ticketId}</strong>?</p>
+              <div className="mt-4 text-sm bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                  <p><strong>Duration:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
+                  {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
+              </div>
+          </div>
+      );
+  }
 
   if (firebaseError) {
     return (
@@ -936,15 +1220,36 @@ ${allNotes}
       <ConfirmationModal
         isOpen={isConfirmingDelete}
         title="Confirm Deletion"
-        message={`Are you sure you want to permanently delete this time log (ID: ${logToDeleteId})? This action cannot be undone.`}
+        message={deleteMessage}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+        confirmText="Delete"
+      />
+      <ConfirmationModal
+        isOpen={isConfirmingSubmit}
+        title="Mark as Submitted?"
+        message={`This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`}
+        onConfirm={handleMarkAsSubmitted}
+        onCancel={() => setIsConfirmingSubmit(false)}
+        confirmText="Mark as Submitted"
       />
       <ReportModal
           isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
+          onClose={() => {
+            setIsReportModalOpen(false);
+            if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== 'Submitted') {
+                setIsConfirmingSubmit(true);
+            }
+          }}
           reportData={generatedReport}
           ticketId={reportingTicketInfo?.ticketId}
+      />
+      <ReallocateModal
+        isOpen={isReallocateModalOpen}
+        onClose={() => setIsReallocateModalOpen(false)}
+        sessionInfo={reallocatingSessionInfo}
+        allTicketIds={allTicketIds}
+        onConfirm={handleReallocateSession}
       />
 
       <div className="max-w-xl mx-auto py-8">
@@ -1050,7 +1355,7 @@ ${allNotes}
             className={`w-full p-3 mb-4 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
           />
           {isInputTicketClosed && (
-              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is permanently closed.</p>
+              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
           {(isTimerRunning || isTimerPaused) && (
@@ -1103,9 +1408,10 @@ ${allNotes}
                 <div>
                     <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                     <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="All">All Tickets</option>
+                        <option value="All">All Unsubmitted</option>
                         <option value="Open">Open</option>
                         <option value="Closed">Closed</option>
+                        <option value="Submitted">Submitted</option>
                     </select>
                 </div>
                 <div>
@@ -1123,26 +1429,46 @@ ${allNotes}
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
-          <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
-            <div className="relative">
-                <select
-                    value={exportOption}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        setExportOption(val);
-                        handleExport(val);
-                    }}
-                    disabled={isLoading}
-                    className="pl-3 pr-8 py-2 bg-green-500 text-white font-semibold text-sm rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
-                >
-                    <option value="" disabled>Export CSV...</option>
-                    <option value="selected" disabled={selectedTickets.size === 0}>Export Selected ({selectedTickets.size})</option>
-                    <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered ({filteredAndGroupedLogs.length})</option>
-                    <option value="all" disabled={logs.length === 0}>Export All</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
-                    <Download className="h-4 w-4" />
+          <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
+            <div className="flex items-center gap-2">
+                {statusFilter === 'Submitted' ? (
+                  <button 
+                    onClick={handleMarkAsUnsubmitted}
+                    disabled={isActionDisabled || isLoading}
+                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                  >
+                    Unsubmit
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleCreateDraft}
+                    disabled={isActionDisabled || isLoading}
+                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    AI Draft
+                  </button>
+                )}
+                <div className="relative">
+                    <select
+                        value={exportOption}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setExportOption(val);
+                            handleExport(val);
+                        }}
+                        disabled={isLoading}
+                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        aria-label="Export CSV"
+                    >
+                        <option value="" disabled>Export CSV...</option>
+                        <option value="selected" disabled={isActionDisabled}>Export Selected</option>
+                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
+                        <option value="all" disabled={logs.length === 0}>Export All</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                        <Download className="h-5 w-5" />
+                    </div>
                 </div>
             </div>
           </div>
@@ -1161,7 +1487,9 @@ ${allNotes}
             </div>
           {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
           <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
-            {filteredAndGroupedLogs.map((group) => (
+            {filteredAndGroupedLogs.map((group) => {
+              const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+              return (
               <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
                    <div className="flex items-start flex-grow">
@@ -1173,20 +1501,50 @@ ${allNotes}
                             className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 mr-4 mt-1 self-start flex-shrink-0"
                         />
                         <div className="flex-grow">
-                            <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
+                            <div className="flex items-center gap-2">
+                                {editingTicketId === group.ticketId ? (
+                                    <input
+                                        type="text"
+                                        value={editingTicketValue}
+                                        onChange={(e) => setEditingTicketValue(e.target.value)}
+                                        onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                handleUpdateTicketId(group.ticketId, editingTicketValue);
+                                            } else if (e.key === 'Escape') {
+                                                setEditingTicketId(null);
+                                            }
+                                        }}
+                                        className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <>
+                                        <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
+                                        {isFullySubmitted && <Check className="w-5 h-5 text-green-500" title="All sessions submitted"/>}
+                                        <button 
+                                            onClick={() => {
+                                                setEditingTicketId(group.ticketId);
+                                                setEditingTicketValue(group.ticketId);
+                                            }}
+                                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                            title="Edit Ticket ID"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                             <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
                             <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
                         </div>
                     </div>
                   <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
-                    <button onClick={() => handleOpenReportModal(group.ticketId, group.totalDurationMs)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-fuchsia-600 text-white font-semibold text-xs rounded-lg hover:bg-fuchsia-700 transition-colors active:scale-[0.98] disabled:opacity-50 shadow-md" title="Draft Status Update using Gemini and Notes">
-                        <span role="img" aria-label="sparkles">✨</span><span>Draft Status</span>
-                    </button>
                     {group.isClosed ? (
                         <>
-                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="w-4 h-4" /><span>Closed</span></span>
+                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
                             <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
-                                <Repeat className="w-4 h-4" /><span>Re-open Ticket</span>
+                                <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
                             </button>
                         </>
                     ) : (
@@ -1195,7 +1553,7 @@ ${allNotes}
                                 <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
                             <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
-                                <Repeat className="h-4 w-4" /><span>Start New Session</span>
+                                <Repeat className="w-4 w-4" /><span>Start New Session</span>
                             </button>
                         </>
                     )}
@@ -1204,15 +1562,34 @@ ${allNotes}
                 <ul className="pl-3 space-y-2 mt-2 border-l-2 border-gray-300 dark:border-gray-600">
                     {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
                         <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
-                            <div className="flex justify-between items-center">
-                                <span className="font-mono font-bold text-sm text-gray-800 dark:text-gray-200 flex-shrink-0 mr-4">{formatTime(session.accumulatedMs)}</span>
+                            <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        aria-label={`Select session ${session.id}`}
+                                        checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                                        onChange={() => handleToggleSelectSession(session.id)}
+                                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
+                                    <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
+                                </div>
                                 <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                <button onClick={() => handleDeleteClick(session.id)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                <button 
+                                    onClick={() => {
+                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                                        setIsReallocateModalOpen(true);
+                                    }} 
+                                    disabled={isLoading} 
+                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
+                                    <CornerUpRight className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => handleDeleteClick(session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
                                     <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
                             {session.note && (
-                                <p className="mt-1 flex items-start text-xs text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600 pt-1">
+                                <p className={`mt-1 flex items-start text-xs border-t border-gray-200 dark:border-gray-600 pt-1 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
                                     <BookOpen className="h-3 w-3 mr-1 text-indigo-400 dark:text-indigo-500 flex-shrink-0 mt-[2px]"/>
                                     <span className="italic break-words">{session.note}</span>
                                 </p>
@@ -1221,7 +1598,8 @@ ${allNotes}
                     ))}
                 </ul>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </section>
       </div>
@@ -1230,4 +1608,6 @@ ${allNotes}
 };
 
 export default App;
+
+
 
