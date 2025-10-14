@@ -271,6 +271,10 @@ const WelcomeModal = ({ isOpen, onClose }) => {
  * Main application component for time tracking.
  */
 const App = () => {
+  // --- Refs for stable callbacks ---
+  const intervalRef = useRef(null);
+  const activeLogRef = useRef();
+
   // --- Firebase State ---
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
@@ -298,7 +302,6 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
-  const scrollPosition = useRef(0);
 
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
@@ -323,6 +326,11 @@ const App = () => {
 
   // --- Theme State ---
   const [theme, setTheme] = useState('light');
+
+  // Keep a ref to activeLogData to use in intervals without re-triggering effects
+  useEffect(() => {
+    activeLogRef.current = activeLogData;
+  });
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -522,25 +530,18 @@ const App = () => {
 
   // --- Timer Interval Effect ---
   useEffect(() => {
-    let interval = null;
-    const startTime = activeLogData?.startTime;
-    const accumulatedMs = activeLogData?.accumulatedMs || 0;
-
-    if (isTimerRunning && runningLogDocId && startTime) {
-      interval = setInterval(() => {
-        const currentRunDuration = Date.now() - startTime;
-        setElapsedMs(accumulatedMs + currentRunDuration);
-      }, 100);  // Update more frequently for smoother display
-    } else if (isTimerPaused && activeLogData) {
-      setElapsedMs(accumulatedMs);
+    if (isTimerRunning) {
+      intervalRef.current = setInterval(() => {
+        if (activeLogRef.current && activeLogRef.current.startTime) {
+          const currentRunDuration = Date.now() - activeLogRef.current.startTime;
+          setElapsedMs(activeLogRef.current.accumulatedMs + currentRunDuration);
+        }
+      }, 1000);
+    } else {
+      clearInterval(intervalRef.current);
     }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isTimerRunning, isTimerPaused, runningLogDocId, activeLogData]);
+    return () => clearInterval(intervalRef.current);
+  }, [isTimerRunning]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -728,7 +729,6 @@ const App = () => {
     if (!getCollectionRef || finalTicketId.trim() === '') return;
     
     if (ticketStatuses[finalTicketId]?.isClosed) {
-        console.log(`Cannot start session for closed ticket: ${finalTicketId}`);
         return; 
     }
 
@@ -773,7 +773,6 @@ const App = () => {
   
   const handleReopenTicket = useCallback(async (e, ticketId) => {
     e.preventDefault();
-    e.stopPropagation();
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
@@ -1186,28 +1185,6 @@ ${combinedReport.trim()}
   }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer]);
 
 
-  // --- Scroll Position Management ---
-  useEffect(() => {
-    const saveScrollPosition = () => {
-      sessionStorage.setItem('scrollPosition', window.scrollY);
-    };
-
-    const restoreScrollPosition = () => {
-      const savedPosition = sessionStorage.getItem('scrollPosition');
-      if (savedPosition) {
-        window.scrollTo(0, parseInt(savedPosition, 10));
-      }
-    };
-
-    window.addEventListener('beforeunload', saveScrollPosition);
-    restoreScrollPosition();
-
-    return () => {
-      window.removeEventListener('beforeunload', saveScrollPosition);
-    };
-  }, []);
-
-
   // --- Render Logic ---
   let deleteMessage = null;
   if (logToDelete) {
@@ -1410,14 +1387,14 @@ ${combinedReport.trim()}
 
           <div className="flex space-x-3">
             <button
-              onClick={actionHandler}
+              onClick={(e) => { e.preventDefault(); actionHandler(); }}
               disabled={isButtonDisabled || isLoading}
               className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${(isButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {(isLoading && (isTimerRunning || isTimerPaused)) ? <Loader className="h-5 w-5 animate-spin" /> : (<><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></>)}
             </button>
             <button
-              onClick={() => stopTimer(false)}
+              onClick={(e) => { e.preventDefault(); stopTimer(false); }}
               disabled={isStopButtonDisabled || isLoading}
               title="Stop and Finalize Activity"
               className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${(isStopButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1480,6 +1457,17 @@ ${combinedReport.trim()}
                   </button>
                 )}
                 <div className="relative">
+                    <button
+                        onClick={(e) => {
+                            const select = e.currentTarget.nextSibling;
+                            select.showPicker();
+                        }}
+                        disabled={isLoading}
+                        className="w-10 h-10 flex items-center justify-center bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-400"
+                        aria-label="Export CSV"
+                    >
+                        <Download className="h-5 w-5 text-white" />
+                    </button>
                     <select
                         value={exportOption}
                         onChange={(e) => {
@@ -1487,18 +1475,13 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        disabled={isLoading}
-                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
-                        aria-label="Export CSV"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     >
                         <option value="" disabled>Export CSV...</option>
                         <option value="selected" disabled={isActionDisabled}>Export Selected</option>
                         <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
                         <option value="all" disabled={logs.length === 0}>Export All</option>
                     </select>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
-                        <Download className="h-5 w-5" />
-                    </div>
                 </div>
             </div>
           </div>
@@ -1593,7 +1576,7 @@ ${combinedReport.trim()}
                     {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
                         <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
                             <div className="flex justify-between items-center gap-2">
-                                                                                                                             <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
                                         aria-label={`Select session ${session.id}`}
@@ -1602,7 +1585,6 @@ ${combinedReport.trim()}
                                         className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
                                     />
                                     {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
-
                                     <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
                                 </div>
                                 <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -1639,5 +1621,4 @@ ${combinedReport.trim()}
 };
 
 export default App;
-
 
