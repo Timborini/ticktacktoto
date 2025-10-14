@@ -35,32 +35,23 @@ const firebaseConfig = {
  */
 const useTimer = (activeLogData, isTimerRunning) => {
   const [elapsedMs, setElapsedMs] = useState(0);
-  const activeLogDataRef = useRef(activeLogData);
+  const intervalRef = useRef(null);
 
-  // Keep a ref to the active log data to avoid re-running the interval effect.
+  // --- Stable Timer Interval Effect ---
   useEffect(() => {
-    activeLogDataRef.current = activeLogData;
-  }, [activeLogData]);
-
-  // The main timer interval effect.
-  useEffect(() => {
-    let interval = null;
     if (isTimerRunning) {
-      interval = setInterval(() => {
-        const logData = activeLogDataRef.current;
-        if (logData && logData.startTime) {
-          const currentRunDuration = Date.now() - logData.startTime;
-          setElapsedMs(logData.accumulatedMs + currentRunDuration);
+      intervalRef.current = setInterval(() => {
+        if (activeLogData && activeLogData.startTime) {
+          const currentRunDuration = Date.now() - activeLogData.startTime;
+          setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
         }
       }, 1000);
-    } else {
-      clearInterval(interval);
     }
-
+  
     return () => {
-      clearInterval(interval);
+      clearInterval(intervalRef.current);
     };
-  }, [isTimerRunning]);
+  }, [isTimerRunning, activeLogData]);
 
   // Effect to set the elapsed time when the timer is not running (e.g., on load or pause).
   useEffect(() => {
@@ -800,22 +791,43 @@ const App = () => {
     };
   }, [isTimerRunning, isTimerPaused, currentTicketId, currentNote, ticketStatuses, activeLogData, isLoading, pauseTimer, startOrResumeTimer, handleStartNewOrOverride]);
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
+    const actionHandlerRef = useRef(actionHandler);
+    const stopTimerRef = useRef(() => stopTimer(currentNote, false));
+
+    useEffect(() => {
+        actionHandlerRef.current = actionHandler;
+        stopTimerRef.current = () => stopTimer(currentNote, false);
+    }, [actionHandler, stopTimer, currentNote]);
+
+    const handleKeyDown = useCallback((event) => {
       const activeTag = document.activeElement.tagName;
-      if (['INPUT', 'TEXTAREA'].includes(activeTag) || document.querySelector('.fixed.inset-0')) return;
-      
-      if (e.key === 'Enter' && (e.altKey || e.metaKey)) {
-        e.preventDefault();
-        if (!isStopButtonDisabled) stopTimer(currentNote, false);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (actionHandler && !isButtonDisabled) actionHandler();
+
+      if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
+        event.preventDefault();
+        if (!isStopButtonDisabled) {
+          stopTimerRef.current();
+        }
+        return;
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer, currentNote]);
+
+      if (event.key === 'Enter') {
+        if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
+          return;
+        }
+        event.preventDefault();
+        if (actionHandlerRef.current && !isButtonDisabled) {
+          actionHandlerRef.current();
+        }
+      }
+    }, [isButtonDisabled, isStopButtonDisabled]); // Dependencies that control logic
+
+    useEffect(() => {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }, [handleKeyDown]);
+
 
   // --- Final Render Check ---
   if (!isAuthReady || isLoading) return <div className="flex justify-center items-center h-screen bg-gray-50"><Loader className="h-10 w-10 text-indigo-600 animate-spin" /></div>;
