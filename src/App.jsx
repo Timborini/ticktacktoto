@@ -519,7 +519,7 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, getCollectionRef, runningLogDocId]);
+  }, [isAuthReady, getCollectionRef]);
 
   // --- Timer Interval Effect ---
   useEffect(() => {
@@ -739,11 +739,13 @@ const App = () => {
     setCurrentNote(''); 
   }, [getCollectionRef, currentTicketId, isTimerPaused, isTimerRunning, stopTimer, startNewSession, ticketStatuses]);
 
-  const handleContinueTicket = useCallback(async (ticketId) => {
+  const handleContinueTicket = useCallback(async (e, ticketId) => {
+    e.preventDefault();
     await startNewOrOverride(ticketId);
   }, [startNewOrOverride]);
   
-  const handleCloseTicket = useCallback(async (ticketId) => {
+  const handleCloseTicket = useCallback(async (e, ticketId) => {
+    e.preventDefault();
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
@@ -766,7 +768,8 @@ const App = () => {
     }
   }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
   
-  const handleReopenTicket = useCallback(async (ticketId) => {
+  const handleReopenTicket = useCallback(async (e, ticketId) => {
+    e.preventDefault();
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
@@ -784,7 +787,8 @@ const App = () => {
     }
   }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
 
-  const handleDeleteClick = useCallback((session) => {
+  const handleDeleteClick = useCallback((e, session) => {
+    e.preventDefault();
     setLogToDelete(session);
     setIsConfirmingDelete(true);
   }, []);
@@ -1543,16 +1547,16 @@ ${combinedReport.trim()}
                     {group.isClosed ? (
                         <>
                             <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-                            <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
+                            <button onClick={(e) => handleReopenTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
                                 <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
                             </button>
                         </>
                     ) : (
                         <>
-                            <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
+                            <button onClick={(e) => handleCloseTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
                                 <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
+                            <button onClick={(e) => handleContinueTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
                                 <Repeat className="w-4 w-4" /><span>Start New Session</span>
                             </button>
                         </>
@@ -1584,7 +1588,7 @@ ${combinedReport.trim()}
                                     className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
                                     <CornerUpRight className="h-4 w-4" />
                                 </button>
-                                <button onClick={() => handleDeleteClick(session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                <button onClick={(e) => handleDeleteClick(e, session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
                                     <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
@@ -1608,6 +1612,4 @@ ${combinedReport.trim()}
 };
 
 export default App;
-
-
 
