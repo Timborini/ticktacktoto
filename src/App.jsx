@@ -1180,6 +1180,28 @@ ${combinedReport.trim()}
   }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer]);
 
 
+  // --- Scroll Position Management ---
+  useEffect(() => {
+    const saveScrollPosition = () => {
+      sessionStorage.setItem('scrollPosition', window.scrollY);
+    };
+
+    const restoreScrollPosition = () => {
+      const savedPosition = sessionStorage.getItem('scrollPosition');
+      if (savedPosition) {
+        window.scrollTo(0, parseInt(savedPosition, 10));
+      }
+    };
+
+    window.addEventListener('beforeunload', saveScrollPosition);
+    restoreScrollPosition();
+
+    return () => {
+      window.removeEventListener('beforeunload', saveScrollPosition);
+    };
+  }, []);
+
+
   // --- Render Logic ---
   let deleteMessage = null;
   if (logToDelete) {
@@ -1565,7 +1587,7 @@ ${combinedReport.trim()}
                     {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
                         <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
                             <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-2">
+                                                                                                                             <div className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
                                         aria-label={`Select session ${session.id}`}
@@ -1574,6 +1596,7 @@ ${combinedReport.trim()}
                                         className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
                                     />
                                     {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
+
                                     <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
                                 </div>
                                 <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
