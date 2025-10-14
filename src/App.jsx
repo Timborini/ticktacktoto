@@ -298,6 +298,7 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
+  const scrollPosition = useRef(0);
 
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
@@ -522,20 +523,24 @@ const App = () => {
   // --- Timer Interval Effect ---
   useEffect(() => {
     let interval = null;
-    if (isTimerRunning && runningLogDocId) {
+    const startTime = activeLogData?.startTime;
+    const accumulatedMs = activeLogData?.accumulatedMs || 0;
+
+    if (isTimerRunning && runningLogDocId && startTime) {
       interval = setInterval(() => {
-         if(activeLogData && activeLogData.startTime) {
-            const currentRunDuration = Date.now() - activeLogData.startTime;
-            setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
-         }
-      }, 1000);
+        const currentRunDuration = Date.now() - startTime;
+        setElapsedMs(accumulatedMs + currentRunDuration);
+      }, 100);  // Update more frequently for smoother display
+    } else if (isTimerPaused && activeLogData) {
+      setElapsedMs(accumulatedMs);
     }
+
     return () => {
       if (interval) {
         clearInterval(interval);
       }
     };
-  }, [isTimerRunning, runningLogDocId, activeLogData]);
+  }, [isTimerRunning, isTimerPaused, runningLogDocId, activeLogData]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -768,6 +773,7 @@ const App = () => {
   
   const handleReopenTicket = useCallback(async (e, ticketId) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
