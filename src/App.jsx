@@ -500,15 +500,13 @@ const App = () => {
           setElapsedMs(currentActiveLog.accumulatedMs);
         }
       } else {
-        if (runningLogDocId) {
-            setIsTimerRunning(false);
-            setIsTimerPaused(false);
-            setRunningLogDocId(null);
-            setActiveLogData(null); 
-            setCurrentTicketId('');
-            setCurrentNote('');
-            setElapsedMs(0);
-        }
+        setIsTimerRunning(false);
+        setIsTimerPaused(false);
+        setRunningLogDocId(null);
+        setActiveLogData(null); 
+        setCurrentTicketId('');
+        setCurrentNote('');
+        setElapsedMs(0);
       }
 
       setIsLoading(false);
@@ -1612,4 +1610,5 @@ ${combinedReport.trim()}
 };
 
 export default App;
+
 
