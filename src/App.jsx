@@ -1164,7 +1164,7 @@ ${combinedReport.trim()}
       }
       
       if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
+        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
           return;
         }
 
