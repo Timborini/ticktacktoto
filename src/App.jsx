@@ -1488,7 +1488,7 @@ ${combinedReport.trim()}
                 </label>
             </div>
           {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
-          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
+          <ul className="space-y-6 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
               return (
