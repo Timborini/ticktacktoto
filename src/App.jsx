@@ -1384,18 +1384,18 @@ ${combinedReport.trim()}
           <div className="flex space-x-3">
             <button
               onClick={actionHandler}
-              disabled={isButtonDisabled || isLoading}
-              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${(isButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isButtonDisabled}
+              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {(isLoading && (isTimerRunning || isTimerPaused)) ? <Loader className="h-5 w-5 animate-spin" /> : (<><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></>)}
+              <ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span>
             </button>
             <button
               onClick={() => stopTimer(false)}
-              disabled={isStopButtonDisabled || isLoading}
+              disabled={isStopButtonDisabled}
               title="Stop and Finalize Activity"
-              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${(isStopButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {isLoading && !(isTimerRunning || isTimerPaused) ? <Loader className="h-6 w-6 animate-spin" /> : <Square className="h-6 w-6" />}
+              <Square className="h-6 w-6" />
             </button>
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
@@ -1438,7 +1438,7 @@ ${combinedReport.trim()}
                 {statusFilter === 'Submitted' ? (
                   <button 
                     onClick={handleMarkAsUnsubmitted}
-                    disabled={isActionDisabled || isLoading}
+                    disabled={isActionDisabled}
                     className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
                   >
                     Unsubmit
@@ -1446,7 +1446,7 @@ ${combinedReport.trim()}
                 ) : (
                   <button 
                     onClick={handleCreateDraft}
-                    disabled={isActionDisabled || isLoading}
+                    disabled={isActionDisabled}
                     className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
                   >
                     AI Draft
@@ -1460,7 +1460,6 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        disabled={isLoading}
                         className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
                         aria-label="Export CSV"
                     >
@@ -1550,16 +1549,16 @@ ${combinedReport.trim()}
                     {group.isClosed ? (
                         <>
                             <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-                            <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
+                            <button onClick={() => handleReopenTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
                                 <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
                             </button>
                         </>
                     ) : (
                         <>
-                            <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
+                            <button onClick={() => handleCloseTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
                                 <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
+                            <button onClick={() => handleContinueTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
                                 <Repeat className="w-4 w-4" /><span>Start New Session</span>
                             </button>
                         </>
@@ -1587,11 +1586,10 @@ ${combinedReport.trim()}
                                         setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
                                         setIsReallocateModalOpen(true);
                                     }} 
-                                    disabled={isLoading} 
                                     className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
                                     <CornerUpRight className="h-4 w-4" />
                                 </button>
-                                <button onClick={() => handleDeleteClick(session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                <button onClick={() => handleDeleteClick(session)} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
                                     <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
