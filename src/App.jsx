@@ -298,6 +298,7 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
@@ -512,10 +513,12 @@ const App = () => {
       }
 
       setIsLoading(false);
+      setHasLoadedOnce(true);
     }, (error) => {
       console.error('Firestore snapshot error:', error);
       setFirebaseError('Failed to load real-time data. Check console.');
       setIsLoading(false);
+      setHasLoadedOnce(true);
     });
 
     return () => unsubscribe();
@@ -1205,7 +1208,7 @@ ${combinedReport.trim()}
     );
   }
   
-  if (isLoading || !isAuthReady) {
+  if (!isAuthReady || !hasLoadedOnce) {
     return (
         <div className="flex justify-center items-center h-screen bg-gray-50">
             <Loader className="h-10 w-10 text-indigo-600 animate-spin" />
