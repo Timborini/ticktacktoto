@@ -1060,7 +1060,7 @@ ${combinedReport.trim()}
       }
 
       if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
+        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
           return;
         }
         event.preventDefault();
@@ -1121,8 +1121,26 @@ ${combinedReport.trim()}
           {(isTimerRunning || isTimerPaused) && <div className="mb-4"><label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">Session Notes</label><textarea placeholder="What are you working on?" value={currentNote} onChange={(e) => setCurrentNote(e.target.value)} rows="2" className="w-full p-2 text-sm border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 resize-none"/></div>}
           <div className={`text-center py-4 rounded-xl mb-6 ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50' : 'bg-gray-50 dark:bg-gray-700/50'}`}><p className="text-4xl font-mono font-bold">{formatTime(elapsedMs)}</p></div>
           <div className="flex space-x-3">
+<<<<<<< Updated upstream
             <button type="button" onClick={actionHandler} disabled={isButtonDisabled} className={`flex-grow flex items-center justify-center space-x-2 py-4 rounded-xl font-bold text-lg ${actionStyle} disabled:opacity-50 disabled:cursor-not-allowed`}><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></button>
             <button type="button" onClick={() => stopTimer(false)} disabled={isStopButtonDisabled} className="w-16 flex items-center justify-center py-4 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"><Square className="h-6 w-6" /></button>
+=======
+            <button
+              onClick={actionHandler}
+              disabled={isButtonDisabled}
+              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span>
+            </button>
+            <button
+              onClick={() => stopTimer(false)}
+              disabled={isStopButtonDisabled}
+              title="Stop and Finalize Activity"
+              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Square className="h-6 w-6" />
+            </button>
+>>>>>>> Stashed changes
           </div>
         </section>
 
@@ -1140,6 +1158,7 @@ ${combinedReport.trim()}
           <div className="flex justify-between items-center gap-4 mb-4 border-b pb-2">
             <h2 className="flex items-center text-xl font-semibold"><List className="h-5 w-5 mr-2" />History</h2>
             <div className="flex items-center gap-2">
+<<<<<<< Updated upstream
               {statusFilter==='Submitted' ? 
                 (<button type="button" onClick={(e) => { e.preventDefault(); handleMarkAsUnsubmitted(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 disabled:opacity-50">Unsubmit</button>) : 
                 (<button type="button" onClick={(e) => { e.preventDefault(); handleCreateDraft(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">AI Draft</button>)
@@ -1179,6 +1198,175 @@ ${combinedReport.trim()}
           </div>
           <div className="flex items-center pb-4 border-b"><input type="checkbox" id="select-all" checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))} onChange={handleToggleSelectAll} disabled={!filteredAndGroupedLogs.length} className="h-5 w-5 rounded border-gray-300 text-indigo-600"/><label htmlFor="select-all" className="ml-2 text-sm font-medium">Select All Visible</label></div>
           <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">{filteredAndGroupedLogs.length === 0 ? <p className="text-center py-4">No logs match filters.</p> : filteredAndGroupedLogs.map(group => (<li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border"><div className="flex justify-between items-start mb-2 border-b pb-2"><div className="flex items-start flex-grow"><input type="checkbox" checked={selectedTickets.has(group.ticketId)} onChange={() => handleToggleSelectTicket(group.ticketId)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 mr-4 mt-1"/><div><div className="flex items-center gap-2">{editingTicketId === group.ticketId ? (<input type="text" value={editingTicketValue} onChange={(e) => setEditingTicketValue(e.target.value)} onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)} onKeyDown={(e) => {if (e.key === 'Enter') handleUpdateTicketId(group.ticketId, editingTicketValue); else if (e.key === 'Escape') setEditingTicketId(null);}} className="text-indigo-700 font-extrabold text-lg bg-indigo-50 rounded-md px-2" autoFocus/>) : (<><p className="text-indigo-700 font-extrabold text-lg break-all">{group.ticketId}</p>{group.sessions.every(s=>s.status==='submitted') && <Check className="w-5 h-5 text-green-500"/>}<button type="button" onClick={() => {setEditingTicketId(group.ticketId); setEditingTicketValue(group.ticketId);}} className="text-gray-400 hover:text-indigo-600"><Pencil className="w-4 h-4" /></button></>)}</div><p className="text-sm mt-1">Total: <span className="font-mono font-bold text-base">{formatTime(group.totalDurationMs)}</span></p></div></div><div className="flex flex-col space-y-2 mt-1">{group.isClosed ? (<><span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span><button type="button" onClick={(e) => handleReopenTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Re-open</span></button></>) : (<><button type="button" onClick={(e) => handleCloseTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Close</span></button><button type="button" onClick={(e) => handleContinueTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Continue</span></button></>)}</div></div><ul className="pl-3 space-y-2 mt-2 border-l-2">{group.sessions.sort((a,b) => b.endTime - a.endTime).map(session => (<li key={session.id} className="text-xs pt-1 pb-1"><div className="flex justify-between items-center gap-2"><div className="flex items-center gap-2"><input type="checkbox" checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)} onChange={() => handleToggleSelectSession(session.id)} className="h-4 w-4 rounded border-gray-300 text-indigo-600"/>{session.status==='submitted' && <Check className="h-4 w-4 text-green-500" />}<span className={`font-mono font-bold text-sm ${session.status==='submitted' ? 'text-gray-400' : ''}`}>{formatTime(session.accumulatedMs)}</span></div><span className="text-gray-500 text-right text-xs">{new Date(session.endTime).toLocaleDateString()}</span><button type="button" onClick={() => {setReallocatingSessionInfo({sessionId: session.id, currentTicketId: group.ticketId}); setIsReallocateModalOpen(true);}} disabled={isLoading} className="p-1 text-gray-400 hover:text-indigo-600"><CornerUpRight className="h-4 w-4" /></button><button type="button" onClick={(e) => handleDeleteClick(e, session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div>{session.note && <p className={`mt-1 flex items-start text-xs border-t pt-1 ${session.status==='submitted' ? 'text-gray-400' : 'text-gray-600'}`}><BookOpen className="h-3 w-3 mr-1 text-indigo-400 flex-shrink-0 mt-px"/><em>{session.note}</em></p>}</li>))}</ul></li>))}</ul>
+=======
+                {statusFilter === 'Submitted' ? (
+                  <button 
+                    onClick={handleMarkAsUnsubmitted}
+                    disabled={isActionDisabled}
+                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                  >
+                    Unsubmit
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleCreateDraft}
+                    disabled={isActionDisabled}
+                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    AI Draft
+                  </button>
+                )}
+                <div className="relative">
+                    <select
+                        value={exportOption}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setExportOption(val);
+                            handleExport(val);
+                        }}
+                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        aria-label="Export CSV"
+                    >
+                        <option value="" disabled>Export CSV...</option>
+                        <option value="selected" disabled={isActionDisabled}>Export Selected</option>
+                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
+                        <option value="all" disabled={logs.length === 0}>Export All</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                        <Download className="h-5 w-5" />
+                    </div>
+                </div>
+            </div>
+          </div>
+           <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
+                <input
+                    type="checkbox"
+                    id="select-all-checkbox"
+                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+                    onChange={handleToggleSelectAll}
+                    disabled={filteredAndGroupedLogs.length === 0}
+                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Select All Visible
+                </label>
+            </div>
+          {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
+          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
+            {filteredAndGroupedLogs.map((group) => {
+              const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+              return (
+              <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
+                   <div className="flex items-start flex-grow">
+                        <input
+                            type="checkbox"
+                            aria-label={`Select ticket ${group.ticketId}`}
+                            checked={selectedTickets.has(group.ticketId)}
+                            onChange={() => handleToggleSelectTicket(group.ticketId)}
+                            className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 mr-4 mt-1 self-start flex-shrink-0"
+                        />
+                        <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                                {editingTicketId === group.ticketId ? (
+                                    <input
+                                        type="text"
+                                        value={editingTicketValue}
+                                        onChange={(e) => setEditingTicketValue(e.target.value)}
+                                        onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                handleUpdateTicketId(group.ticketId, editingTicketValue);
+                                            } else if (e.key === 'Escape') {
+                                                setEditingTicketId(null);
+                                            }
+                                        }}
+                                        className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <>
+                                        <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
+                                        {isFullySubmitted && <Check className="w-5 h-5 text-green-500" title="All sessions submitted"/>}
+                                        <button 
+                                            onClick={() => {
+                                                setEditingTicketId(group.ticketId);
+                                                setEditingTicketValue(group.ticketId);
+                                            }}
+                                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                            title="Edit Ticket ID"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
+                            <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
+                        </div>
+                    </div>
+                  <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
+                    {group.isClosed ? (
+                        <>
+                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
+                            <button onClick={() => handleReopenTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
+                                <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={() => handleCloseTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
+                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
+                            </button>
+                            <button onClick={() => handleContinueTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
+                                <Repeat className="w-4 w-4" /><span>Start New Session</span>
+                            </button>
+                        </>
+                    )}
+                  </div>
+                </div>
+                <ul className="pl-3 space-y-2 mt-2 border-l-2 border-gray-300 dark:border-gray-600">
+                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
+                        <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
+                            <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        aria-label={`Select session ${session.id}`}
+                                        checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                                        onChange={() => handleToggleSelectSession(session.id)}
+                                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
+                                    <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
+                                </div>
+                                <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                <button 
+                                    onClick={() => {
+                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                                        setIsReallocateModalOpen(true);
+                                    }} 
+                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
+                                    <CornerUpRight className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => handleDeleteClick(session)} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {session.note && (
+                                <p className={`mt-1 flex items-start text-xs border-t border-gray-200 dark:border-gray-600 pt-1 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    <BookOpen className="h-3 w-3 mr-1 text-indigo-400 dark:text-indigo-500 flex-shrink-0 mt-[2px]"/>
+                                    <span className="italic break-words">{session.note}</span>
+                                </p>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+              </li>
+              )
+            })}
+          </ul>
+>>>>>>> Stashed changes
         </section>
       </div>
     </div>
