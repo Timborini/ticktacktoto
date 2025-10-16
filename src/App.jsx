@@ -713,6 +713,12 @@ const App = () => {
         setIsLoading(false);
     }
   }, [logToDelete, getCollectionRef]);
+
+  const handleDeleteClick = (e, session) => {
+    e.preventDefault();
+    setLogToDelete(session);
+    setIsConfirmingDelete(true);
+  };
   
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     if (!sessionId || !newTicketId || !getCollectionRef) return;
