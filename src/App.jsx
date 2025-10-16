@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Clock, Play, Square, List, Loader, Trash2, Pause, X, Check, Repeat, Lock, Send, Clipboard, BookOpen, User, Sun, Moon, Info, Pencil, CornerUpRight, Download
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight
 } from 'lucide-react';
 
-// --- Firebase Imports ---
+// --- Firebase Imports (MUST use module path for React) ---
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
@@ -12,9 +12,15 @@ import {
   getFirestore, collection, query, onSnapshot,
   doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
+import { setLogLevel } from 'firebase/firestore';
 
+// Set Firebase log level for debugging in the console
+setLogLevel('debug');
 
-// Firebase configuration
+// --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
+const appId = 'default-app-id'; 
+
+// This has been updated with your specific Firebase configuration.
 const firebaseConfig = {
   apiKey: "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug",
   authDomain: "time-tracker-9a56c.firebaseapp.com",
@@ -25,11 +31,10 @@ const firebaseConfig = {
   measurementId: "G-4NBGX3Y9N9"
 };
 
-const appId = 'default-app-id'; 
-
-
 /**
  * Utility function to format milliseconds into HH:MM:SS
+ * @param {number} ms - Milliseconds
+ * @returns {string} Formatted time string
  */
 const formatTime = (ms) => {
   if (ms < 0) return '00:00:00';
@@ -44,22 +49,35 @@ const formatTime = (ms) => {
 };
 
 /**
- * UI Components (Modals, Instructions)
+ * Custom Confirmation Modal Component
  */
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
     if (!isOpen) return null;
+
     const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onCancel}>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
+                onClick={(e) => e.stopPropagation()}
+            >
                 <h3 className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}>{title}</h3>
                 <div className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
                 <div className="flex justify-end space-x-3">
-                    <button type="button" onClick={onCancel} className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
-                        <X className="w-4 h-4" /><span>Cancel</span>
+                    <button
+                        onClick={onCancel}
+                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        <X className="w-4 h-4" />
+                        <span>Cancel</span>
                     </button>
-                    <button type="button" onClick={onConfirm} className={`flex items-center space-x-1 px-4 py-2 text-white font-semibold rounded-lg ${confirmButtonColor}`}>
-                        <Check className="w-4 h-4" /><span>{confirmText}</span>
+                    <button
+                        onClick={onConfirm}
+                        className={`flex items-center space-x-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
+                    >
+                        <Check className="w-4 h-4" />
+                        <span>{confirmText}</span>
                     </button>
                 </div>
             </div>
@@ -69,25 +87,70 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
 
 const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm }) => {
     const [newTicketId, setNewTicketId] = useState('');
-    useEffect(() => { if (isOpen) setNewTicketId(''); }, [isOpen]);
+
+    useEffect(() => {
+        // Reset selection when modal opens or session changes
+        if (isOpen) {
+            setNewTicketId('');
+        }
+    }, [isOpen, sessionInfo]);
+
     if (!isOpen || !sessionInfo) return null;
-    const handleConfirm = () => { if (newTicketId && newTicketId !== sessionInfo.currentTicketId) onConfirm(sessionInfo.sessionId, newTicketId); };
+
+    const handleConfirm = () => {
+        if (newTicketId && newTicketId !== sessionInfo.currentTicketId) {
+            onConfirm(sessionInfo.sessionId, newTicketId);
+        }
+    };
+
+    // Filter out the current ticket ID from the list of options
     const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
+                onClick={(e) => e.stopPropagation()}
+            >
                 <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Reallocate Session</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Move from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to:</p>
-                <select id="ticket-reallocate" value={newTicketId} onChange={(e) => setNewTicketId(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                    <option value="" disabled>Select a ticket...</option>
-                    {availableTickets.map(ticketId => <option key={ticketId} value={ticketId}>{ticketId}</option>)}
-                </select>
+                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                    Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
+                </p>
+
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            New Ticket ID
+                        </label>
+                        <select
+                            id="ticket-reallocate"
+                            value={newTicketId}
+                            onChange={(e) => setNewTicketId(e.target.value)}
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                            <option value="" disabled>Select a ticket...</option>
+                            {availableTickets.map(ticketId => (
+                                <option key={ticketId} value={ticketId}>{ticketId}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                
                 <div className="mt-8 flex justify-end space-x-3">
-                    <button type="button" onClick={onClose} className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
-                        <X className="w-4 h-4" /><span>Cancel</span>
+                    <button
+                        onClick={onClose}
+                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        <X className="w-4 h-4" />
+                        <span>Cancel</span>
                     </button>
-                    <button type="button" onClick={handleConfirm} disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId} className="flex items-center space-x-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                        <Check className="w-4 h-4" /><span>Confirm</span>
+                    <button
+                        onClick={handleConfirm}
+                        disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
+                        className="flex items-center space-x-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50"
+                    >
+                        <Check className="w-4 h-4" />
+                        <span>Confirm Reallocation</span>
                     </button>
                 </div>
             </div>
@@ -97,6 +160,7 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
 
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     if (!isOpen) return null;
+
     const copyToClipboard = () => {
         if (reportData?.text) {
             const tempInput = document.createElement('textarea');
@@ -107,19 +171,34 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
             document.body.removeChild(tempInput);
         }
     };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center"><Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Copy and paste into your preferred AI chat application.</p>
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                    <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Copy this prompt and paste it into your preferred AI chat application.</p>
+                
                 <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
                     <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
                 </div>
                 <div className="mt-6 flex justify-between items-center">
-                    <button type="button" onClick={copyToClipboard} disabled={!reportData?.text} className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 disabled:opacity-50">
-                        <Clipboard className="w-4 h-4" /><span>Copy to Clipboard</span>
+                    <button
+                        onClick={copyToClipboard}
+                        disabled={!reportData?.text}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50"
+                    >
+                        <Clipboard className="w-4 h-4" />
+                        <span>Copy to Clipboard</span>
                     </button>
-                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
                         Close
                     </button>
                 </div>
@@ -133,25 +212,28 @@ const InstructionsContent = () => (
         <div>
             <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Core Features:</h4>
             <ul className="list-disc list-inside space-y-1">
-                <li><strong>Timer:</strong> Enter a ticket ID and hit 'START'.</li>
-                <li><strong>Notes:</strong> Add notes to your running session.</li>
-                <li><strong>Editing:</strong> Click <Pencil className="w-4 h-4 inline-block -mt-1"/> to rename a ticket ID, or <CornerUpRight className="w-4 h-4 inline-block -mt-1"/> to reallocate a session.</li>
-                <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' or 'Re-open' them.</li>
+                <li><strong>Start/Stop Timer:</strong> Enter a ticket ID and hit 'START'. The timer will run until you PAUSE or STOP.</li>
+                <li><strong>Session Notes:</strong> Add notes to your running session. They are saved when you pause or stop.</li>
+                <li><strong>Inline Ticket Editing:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1"/> icon next to a ticket ID to rename it across all its sessions.</li>
+                <li><strong>Session Reallocation:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1"/> icon on a session to move it to a different ticket.</li>
+                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed), date, or view 'Submitted' tickets.</li>
+                <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' to archive them, or 'Re-open' them if you need to track more time.</li>
+                <li><strong>Export Data:</strong> Export all logs, filtered logs, or selected logs to a CSV file.</li>
             </ul>
         </div>
         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI Workflow:</h4>
+            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
             <ul className="list-disc list-inside space-y-1">
-                <li>Select items and click "AI Draft".</li>
-                <li>After creating a draft, you'll be prompted to mark items as 'submitted'.</li>
-                <li>Use the filter to view 'Submitted' items.</li>
+                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "AI Draft" button at the top of the history section.</li>
+                <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
+                <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
             </ul>
         </div>
          <div>
             <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Keyboard Shortcuts:</h4>
              <ul className="list-disc list-inside space-y-1">
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume.</li>
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt/Cmd + Enter</span>: Stop.</li>
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume timer.</li>
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt + Enter</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Enter</span>: Stop and finalize the current entry.</li>
             </ul>
         </div>
     </div>
@@ -159,14 +241,23 @@ const InstructionsContent = () => (
 
 const WelcomeModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
+                onClick={(e) => e.stopPropagation()}
+            >
                 <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Welcome to TickTackToto!</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">A quick guide to get you started:</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">Here’s a quick guide to get you started:</p>
+                
                 <InstructionsContent />
+
                 <div className="mt-8 flex justify-end">
-                    <button type="button" onClick={onClose} className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
+                    >
                         Get Started
                     </button>
                 </div>
@@ -174,6 +265,7 @@ const WelcomeModal = ({ isOpen, onClose }) => {
         </div>
     );
 };
+
 
 /**
  * Main application component for time tracking.
@@ -187,15 +279,6 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [firebaseError, setFirebaseError] = useState(null);
   
-  const [logs, setLogs] = useState([]);
-  const [ticketStatuses, setTicketStatuses] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeLogData, setActiveLogData] = useState(null); 
-  const [isTimerRunning, setIsTimerRunning] = useState(false); 
-  const [isTimerPaused, setIsTimerPaused] = useState(false); 
-  const [runningLogDocId, setRunningLogDocId] = useState(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
-
   // --- Inline Editing State ---
   const [editingTicketId, setEditingTicketId] = useState(null);
   const [editingTicketValue, setEditingTicketValue] = useState('');
@@ -204,9 +287,18 @@ const App = () => {
   const [shareId, setShareId] = useState(null);
 
   // --- App State ---
+  const [logs, setLogs] = useState([]);
   const [currentTicketId, setCurrentTicketId] = useState('');
   const [currentNote, setCurrentNote] = useState('');
+  const [isTimerRunning, setIsTimerRunning] = useState(false); 
+  const [isTimerPaused, setIsTimerPaused] = useState(false); 
+  const [elapsedMs, setElapsedMs] = useState(0); 
+  const [runningLogDocId, setRunningLogDocId] = useState(null);
+  const [activeLogData, setActiveLogData] = useState(null); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
@@ -231,9 +323,6 @@ const App = () => {
 
   // --- Theme State ---
   const [theme, setTheme] = useState('light');
-
-  // --- Refs for stable callbacks ---
-  const intervalRef = useRef(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -281,6 +370,7 @@ const App = () => {
         if (user) {
           setUser(user);
           setUserId(user.uid);
+          setIsAuthReady(true);
         } else {
           // If no user, sign in anonymously to allow app usage
           signInAnonymously(userAuth).catch(err => {
@@ -288,7 +378,6 @@ const App = () => {
             setFirebaseError('Failed to sign in anonymously.');
           });
         }
-        setIsAuthReady(true);
       });
 
       return () => unsubscribe();
@@ -404,51 +493,54 @@ const App = () => {
         if (currentActiveLog.startTime) {
           setIsTimerRunning(true);
           setIsTimerPaused(false);
+          const currentRunDuration = Date.now() - currentActiveLog.startTime;
+          setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
         } else {
           setIsTimerRunning(false);
           setIsTimerPaused(true);
+          setElapsedMs(currentActiveLog.accumulatedMs);
         }
       } else {
-        setIsTimerRunning(false);
-        setIsTimerPaused(false);
-        setRunningLogDocId(null);
-        setActiveLogData(null); 
-        setCurrentTicketId('');
-        setCurrentNote('');
+        if (runningLogDocId) {
+            setIsTimerRunning(false);
+            setIsTimerPaused(false);
+            setRunningLogDocId(null);
+            setActiveLogData(null); 
+            setCurrentTicketId('');
+            setCurrentNote('');
+            setElapsedMs(0);
+        }
       }
 
       setIsLoading(false);
+      setHasLoadedOnce(true);
     }, (error) => {
       console.error('Firestore snapshot error:', error);
       setFirebaseError('Failed to load real-time data. Check console.');
       setIsLoading(false);
+      setHasLoadedOnce(true);
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, getCollectionRef]);
+  }, [isAuthReady, getCollectionRef, runningLogDocId]);
 
-  // --- Stable Timer Interval Effect ---
+  // --- Timer Interval Effect ---
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      if (isTimerRunning && activeLogData && activeLogData.startTime) {
-        const currentRunDuration = Date.now() - activeLogData.startTime;
-        setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
-      }
-    }, 1000);
-  
-    return () => {
-      clearInterval(intervalRef.current);
-    };
-  }, [isTimerRunning, activeLogData]);
-
-  useEffect(() => {
-    if (!isTimerRunning && activeLogData) {
-      setElapsedMs(activeLogData.accumulatedMs);
-    } else if (!activeLogData) {
-      setElapsedMs(0);
+    let interval = null;
+    if (isTimerRunning && runningLogDocId) {
+      interval = setInterval(() => {
+         if(activeLogData && activeLogData.startTime) {
+            const currentRunDuration = Date.now() - activeLogData.startTime;
+            setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
+         }
+      }, 1000);
     }
-  }, [activeLogData, isTimerRunning]);
-
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isTimerRunning, runningLogDocId, activeLogData]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -636,6 +728,7 @@ const App = () => {
     if (!getCollectionRef || finalTicketId.trim() === '') return;
     
     if (ticketStatuses[finalTicketId]?.isClosed) {
+        console.log(`Cannot start session for closed ticket: ${finalTicketId}`);
         return; 
     }
 
@@ -649,13 +742,11 @@ const App = () => {
     setCurrentNote(''); 
   }, [getCollectionRef, currentTicketId, isTimerPaused, isTimerRunning, stopTimer, startNewSession, ticketStatuses]);
 
-  const handleContinueTicket = useCallback(async (e, ticketId) => {
-    if(e) e.preventDefault();
+  const handleContinueTicket = useCallback(async (ticketId) => {
     await startNewOrOverride(ticketId);
   }, [startNewOrOverride]);
   
-  const handleCloseTicket = useCallback(async (e, ticketId) => {
-    e.preventDefault();
+  const handleCloseTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
@@ -678,8 +769,7 @@ const App = () => {
     }
   }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
   
-  const handleReopenTicket = useCallback(async (e, ticketId) => {
-    e.preventDefault();
+  const handleReopenTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef || isLoading) return;
 
     setIsLoading(true);
@@ -696,6 +786,11 @@ const App = () => {
         setIsLoading(false);
     }
   }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
+
+  const handleDeleteClick = useCallback((session) => {
+    setLogToDelete(session);
+    setIsConfirmingDelete(true);
+  }, []);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!logToDelete || !getCollectionRef) return;
@@ -714,11 +809,10 @@ const App = () => {
     }
   }, [logToDelete, getCollectionRef]);
 
-  const handleDeleteClick = (e, session) => {
-    e.preventDefault();
-    setLogToDelete(session);
-    setIsConfirmingDelete(true);
-  };
+  const handleCancelDelete = useCallback(() => {
+    setIsConfirmingDelete(false);
+    setLogToDelete(null);
+  }, []);
   
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     if (!sessionId || !newTicketId || !getCollectionRef) return;
@@ -908,6 +1002,7 @@ ${combinedReport.trim()}
     switch (exportType) {
       case 'selected':
         if (selectedTickets.size === 0 && selectedSessions.size === 0) {
+          console.log('Export skipped: No items selected.');
           setExportOption('');
           return;
         }
@@ -947,6 +1042,7 @@ ${combinedReport.trim()}
     }
 
     if (logsToExport.length === 0) {
+      console.log(`Export skipped: No logs for type "${exportType}".`);
       setExportOption('');
       return;
     }
@@ -1021,164 +1117,493 @@ ${combinedReport.trim()}
       setSelectedSessions(new Set()); // Clear individual session selections
   };
   
-  // --- Timer Controls ---
-  const { actionButtonText, ActionButtonIcon, actionHandler, actionStyle, isButtonDisabled, isStopButtonDisabled } = useMemo(() => {
-    const inputId = currentTicketId.trim();
-    const isClosed = ticketStatuses[inputId]?.isClosed;
-    const isPausedOnThisTicket = isTimerPaused && activeLogData?.ticketId === inputId;
-    
-    if (isTimerRunning) return { actionButtonText: 'PAUSE', ActionButtonIcon: Pause, actionHandler: () => pauseTimer(currentNote), actionStyle: 'bg-yellow-500 hover:bg-yellow-600 text-white', isButtonDisabled: isLoading, isStopButtonDisabled: isLoading };
-    if (isPausedOnThisTicket) return { actionButtonText: 'RESUME', ActionButtonIcon: Play, actionHandler: () => startOrResumeTimer(inputId, currentNote), actionStyle: 'bg-green-600 hover:bg-green-700 text-white', isButtonDisabled: isLoading, isStopButtonDisabled: isLoading };
-    
-    return { 
-        actionButtonText: isClosed ? 'TICKET CLOSED' : 'START', 
-        ActionButtonIcon: isClosed ? Lock : Play, 
-        actionHandler: () => startNewOrOverride(inputId), 
-        actionStyle: isClosed ? 'bg-gray-400 text-gray-700' : 'bg-indigo-600 hover:bg-indigo-700 text-white',
-        isButtonDisabled: isLoading || !inputId || isClosed,
-        isStopButtonDisabled: !isTimerPaused
-    };
-  }, [isTimerRunning, isTimerPaused, currentTicketId, currentNote, ticketStatuses, activeLogData, isLoading, pauseTimer, startOrResumeTimer, startNewOrOverride]);
+  const isReady = isAuthReady && userId && db;
+  const pausedTicketId = isTimerPaused ? activeLogData?.ticketId : '';
+  const inputTicketId = currentTicketId.trim();
+  const isInputTicketClosed = ticketStatuses[inputTicketId]?.isClosed || false;
 
-    const actionHandlerRef = useRef(actionHandler);
-    const stopTimerRef = useRef(() => stopTimer(currentNote, false));
+  let actionButtonText;
+  let ActionButtonIcon;
+  let actionHandler;
+  let actionStyle;
 
-    useEffect(() => {
-        actionHandlerRef.current = actionHandler;
-        stopTimerRef.current = () => stopTimer(currentNote, false);
-    }, [actionHandler, stopTimer, currentNote]);
+  if (isTimerRunning) {
+    actionButtonText = 'PAUSE';
+    ActionButtonIcon = Pause;
+    actionHandler = pauseTimer;
+    actionStyle = 'bg-yellow-500 hover:bg-yellow-600 text-white';
+  } else if (isTimerPaused && inputTicketId === pausedTicketId) {
+    actionButtonText = 'RESUME';
+    ActionButtonIcon = Play;
+    actionHandler = startOrResumeTimer;
+    actionStyle = 'bg-green-600 hover:bg-green-700 text-white';
+  } else {
+    actionButtonText = isInputTicketClosed ? 'TICKET CLOSED' : 'START';
+    ActionButtonIcon = isInputTicketClosed ? Lock : Play;
+    actionHandler = () => startNewOrOverride(inputTicketId);
+    actionStyle = isInputTicketClosed 
+        ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+        : 'bg-indigo-600 hover:bg-indigo-700 text-white';
+  }
+  
+  const isInputDisabled = isTimerRunning || !isReady; 
+  const isButtonDisabled = !isReady || (isInputTicketClosed && !isTimerPaused && !isTimerRunning) || (currentTicketId.trim() === '' && !isTimerRunning && !isTimerPaused);
+  const isStopButtonDisabled = !isTimerRunning && !isTimerPaused;
+  const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
 
-    const handleKeyDown = useCallback((event) => {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
       const activeTag = document.activeElement.tagName;
 
       if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
         event.preventDefault();
         if (!isStopButtonDisabled) {
-          stopTimerRef.current();
+          stopTimer(false);
         }
-        return;
+        return; 
       }
-
+      
       if (event.key === 'Enter') {
         if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
           return;
         }
+
         event.preventDefault();
-        if (actionHandlerRef.current && !isButtonDisabled) {
-          actionHandlerRef.current();
+        if (actionHandler && !isButtonDisabled) {
+          actionHandler();
         }
       }
-    }, [isButtonDisabled, isStopButtonDisabled]); // Dependencies that control logic
-
-    useEffect(() => {
-      window.addEventListener('keydown', handleKeyDown);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-      };
-    }, [handleKeyDown]);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer]);
 
 
-  // --- Final Render Check ---
-  if (!isAuthReady || isLoading) return <div className="flex justify-center items-center h-screen bg-gray-50"><Loader className="h-10 w-10 text-indigo-600 animate-spin" /></div>;
-  if (firebaseError) return <div className="p-6 bg-red-100 text-red-700">Error: {firebaseError}</div>;
+  // --- Render Logic ---
+  let deleteMessage = null;
+  if (logToDelete) {
+      deleteMessage = (
+          <div>
+              <p>Are you sure you want to delete this session for ticket <strong>{logToDelete.ticketId}</strong>?</p>
+              <div className="mt-4 text-sm bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                  <p><strong>Duration:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
+                  {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
+              </div>
+          </div>
+      );
+  }
 
-  const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
+  if (firebaseError) {
+    return (
+      <div className="p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md mx-auto max-w-lg mt-8">
+        <div className="flex items-center">
+          <AlertTriangle className="h-6 w-6 mr-3" />
+          <h2 className="text-xl font-bold">Error</h2>
+        </div>
+        <p className="mt-2 text-sm">{firebaseError}</p>
+        <p className="mt-2 text-xs">User ID: <span className='break-all'>{userId || 'N/A'}</span>. App ID: {appId}</p>
+      </div>
+    );
+  }
+  
+  if (!isAuthReady || !hasLoadedOnce) {
+    return (
+        <div className="flex justify-center items-center h-screen bg-gray-50">
+            <Loader className="h-10 w-10 text-indigo-600 animate-spin" />
+            <p className="ml-3 text-lg font-medium text-gray-700">Loading Tracker...</p>
+        </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
-      <ConfirmationModal isOpen={isConfirmingDelete} title="Confirm Deletion" message={logToDelete ? `Delete session for ${logToDelete.ticketId}? (${formatTime(logToDelete.accumulatedMs)})` : ''} onConfirm={() => { handleConfirmDelete(logToDelete); setIsConfirmingDelete(false); }} onCancel={() => setIsConfirmingDelete(false)} confirmText="Delete"/>
-      <ConfirmationModal isOpen={isConfirmingSubmit} title="Mark as Submitted?" message="This will mark selected items as 'submitted' and hide them from the default view." onConfirm={handleMarkAsSubmitted} onCancel={() => setIsConfirmingSubmit(false)} confirmText="Mark as Submitted"/>
-      <ReportModal isOpen={isReportModalOpen} onClose={() => { setIsReportModalOpen(false); if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== 'Submitted') setIsConfirmingSubmit(true); }} reportData={generatedReport} ticketId={reportingTicketInfo?.ticketId}/>
-      <ReallocateModal isOpen={isReallocateModalOpen} onClose={() => setIsReallocateModalOpen(false)} sessionInfo={reallocatingSessionInfo} allTicketIds={allTicketIds} onConfirm={handleReallocateSession}/>
+      <ConfirmationModal
+        isOpen={isConfirmingDelete}
+        title="Confirm Deletion"
+        message={deleteMessage}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        confirmText="Delete"
+      />
+      <ConfirmationModal
+        isOpen={isConfirmingSubmit}
+        title="Mark as Submitted?"
+        message={`This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`}
+        onConfirm={handleMarkAsSubmitted}
+        onCancel={() => setIsConfirmingSubmit(false)}
+        confirmText="Mark as Submitted"
+      />
+      <ReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => {
+            setIsReportModalOpen(false);
+            if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== 'Submitted') {
+                setIsConfirmingSubmit(true);
+            }
+          }}
+          reportData={generatedReport}
+          ticketId={reportingTicketInfo?.ticketId}
+      />
+      <ReallocateModal
+        isOpen={isReallocateModalOpen}
+        onClose={() => setIsReallocateModalOpen(false)}
+        sessionInfo={reallocatingSessionInfo}
+        allTicketIds={allTicketIds}
+        onConfirm={handleReallocateSession}
+      />
 
       <div className="max-w-xl mx-auto py-8">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
-                <div className="flex items-center space-x-3 mb-3">
-                    {user && !user.isAnonymous ? (<><img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-indigo-500"/><div><p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p><button type="button" onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button></div></>) : 
-                    (<button type="button" onClick={handleGoogleLogin} className="flex items-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" className="w-5 h-5"/><span>Sign in with Google</span></button>)}
+                <div className="flex flex-col space-y-3">
+                    <div className="flex items-center space-x-3">
+                        {user && !user.isAnonymous ? (
+                            <>
+                                <img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-indigo-500"/>
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
+                                    <button onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button>
+                                </div>
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleGoogleLogin}
+                                className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+                            >
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" className="w-5 h-5"/>
+                                <span>Sign in with Google</span>
+                            </button>
+                        )}
+                    </div>
+                    <div>
+                        <button 
+                            onClick={() => setShowInstructions(!showInstructions)}
+                            className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
+                            <Info className="w-4 h-4" />
+                            <span>{showInstructions ? 'Hide' : 'Show'} Instructions</span>
+                        </button>
+                    </div>
                 </div>
-                <button type="button" onClick={() => setShowInstructions(!showInstructions)} className="flex items-center space-x-2 text-sm text-gray-500 hover:text-indigo-600"><Info className="w-4 h-4" /><span>{showInstructions ? 'Hide' : 'Show'} Instructions</span></button>
-                {showInstructions && <section className="absolute z-10 top-full mt-2 w-96 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border"><h3 className="text-xl font-semibold mb-4">How to Use</h3><InstructionsContent /><button type="button" onClick={() => setShowInstructions(false)} className="flex items-center justify-center w-full space-x-2 mt-6 px-4 py-2 bg-indigo-100 text-indigo-700 font-semibold rounded-lg"><X className="w-4 h-4" /><span>Hide</span></button></section>}
+
+                {showInstructions && (
+                    <section className="absolute z-10 top-full mt-2 w-96 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
+                        <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">How to Use This Tracker</h3>
+                        <InstructionsContent />
+                        <div className="mt-6 text-center">
+                            <button
+                                onClick={() => setShowInstructions(false)}
+                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                                <span>Hide Instructions</span>
+                            </button>
+                        </div>
+                    </section>
+                )}
             </div>
-            <button type="button" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700">{theme === 'light' ? <Moon className="w-5 h-5"/> : <Sun className="w-5 h-5" />}</button>
+            <div className="flex items-center space-x-2">
+                <button 
+                    onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                    className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                    {theme === 'light' ? <Moon className="w-5 h-5"/> : <Sun className="w-5 h-5" />}
+                </button>
+            </div>
         </div>
 
-        <header className="text-center mb-10"><h1 className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">TickTackToto</h1><p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">the slick ticket time tracker</p></header>
+        <header className="text-center mb-10">
+          <div className="flex flex-col justify-center items-center mb-2">
+            <h1 className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">TickTackToto</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">the slick ticket time tracker</p>
+          </div>
+        </header>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
-             <h2 className="flex items-center text-xl font-semibold mb-4 border-b pb-2"><User className="h-5 w-5 mr-2 text-gray-500"/>Your Profile</h2>
-             <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Title / Role</label>
-             <input id="user-title" type="text" value={userTitle} onChange={(e) => setUserTitle(e.target.value)} placeholder="e.g., Senior Software Engineer" className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
-             <p className="text-xs text-gray-500 mt-1">Used to personalize AI-ready prompts.</p>
+             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <User className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400"/>
+                Your Profile
+            </h2>
+            <div>
+                <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Title / Role</label>
+                <input
+                    id="user-title"
+                    type="text"
+                    value={userTitle}
+                    onChange={(e) => setUserTitle(e.target.value)}
+                    placeholder="e.g., Senior Software Engineer"
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be used to personalize the AI-ready prompt for your status reports.</p>
+            </div>
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl mb-8 border-t-4 border-indigo-500">
-          <div className="flex items-center justify-between mb-4"><h2 className="text-xl font-semibold">{isTimerRunning ? 'Currently Running' : isTimerPaused ? 'Activity Paused' : 'Start New Session'}</h2><Clock className="h-6 w-6 text-indigo-500" /></div>
-          <input type="text" placeholder="Enter Ticket ID (e.g., JIRA-101)" value={currentTicketId} onChange={(e) => setCurrentTicketId(e.target.value)} disabled={isTimerRunning} className={`w-full p-3 mb-4 text-lg border-2 rounded-xl transition-all shadow-sm ${isTimerRunning ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'}`}/>
-          {ticketStatuses[currentTicketId.trim()]?.isClosed && <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>}
-          {(isTimerRunning || isTimerPaused) && <div className="mb-4"><label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">Session Notes</label><textarea placeholder="What are you working on?" value={currentNote} onChange={(e) => setCurrentNote(e.target.value)} rows="2" className="w-full p-2 text-sm border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 resize-none"/></div>}
-          <div className={`text-center py-4 rounded-xl mb-6 ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50' : 'bg-gray-50 dark:bg-gray-700/50'}`}><p className="text-4xl font-mono font-bold">{formatTime(elapsedMs)}</p></div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
+              {isTimerRunning ? 'Currently Running' : isTimerPaused ? 'Activity Paused' : 'Start New Session'}
+            </h2>
+            <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
+          </div>
+
+          <input
+            type="text"
+            placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
+            value={currentTicketId}
+            onChange={(e) => setCurrentTicketId(e.target.value)}
+            disabled={isInputDisabled}
+            className={`w-full p-3 mb-4 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
+          />
+          {isInputTicketClosed && (
+              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
+          )}
+          
+          {(isTimerRunning || isTimerPaused) && (
+            <div className="mb-4">
+                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">Session Notes (Saved on Pause/Stop)</label>
+                <textarea
+                    placeholder="E.g., Fixed critical bug in user authentication module."
+                    value={currentNote}
+                    onChange={(e) => setCurrentNote(e.target.value)}
+                    rows="2"
+                    className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+                />
+            </div>
+          )}
+
+          <div className={`text-center py-4 rounded-xl mb-6 transition-colors ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}>
+            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">{formatTime(elapsedMs)}</p>
+            {(isTimerRunning || isTimerPaused) && (
+                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>{isTimerRunning ? 'Running' : 'Paused'}</p>
+            )}
+          </div>
+
           <div className="flex space-x-3">
-            <button type="button" onClick={actionHandler} disabled={isButtonDisabled} className={`flex-grow flex items-center justify-center space-x-2 py-4 rounded-xl font-bold text-lg ${actionStyle} disabled:opacity-50 disabled:cursor-not-allowed`}><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></button>
-            <button type="button" onClick={() => stopTimer(false)} disabled={isStopButtonDisabled} className="w-16 flex items-center justify-center py-4 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"><Square className="h-6 w-6" /></button>
+            <button
+              onClick={actionHandler}
+              disabled={isButtonDisabled || isLoading}
+              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${(isButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {(isLoading && (isTimerRunning || isTimerPaused)) ? <Loader className="h-5 w-5 animate-spin" /> : (<><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></>)}
+            </button>
+            <button
+              onClick={() => stopTimer(false)}
+              disabled={isStopButtonDisabled || isLoading}
+              title="Stop and Finalize Activity"
+              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${(isStopButtonDisabled || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isLoading && !(isTimerRunning || isTimerPaused) ? <Loader className="h-6 w-6 animate-spin" /> : <Square className="h-6 w-6" />}
+            </button>
           </div>
+           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
+                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume timer.</p>
+                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Alt + Enter</span>: Stop and finalize the current entry.</p>
+           </div>
         </section>
 
-        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl">
-            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Filter & Summary</h2>
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-end">
-                <div><label htmlFor="status-filter" className="block text-sm font-medium mb-1">Status</label><select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"><option value="All">All Unsubmitted</option><option value="Open">Open</option><option value="Closed">Closed</option><option value="Submitted">Submitted</option></select></div>
-                <div><label htmlFor="date-filter" className="block text-sm font-medium mb-1">Date</label><input type="date" id="date-filter" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"/></div>
-                <button type="button" onClick={(e) => { e.preventDefault(); setStatusFilter('All'); setDateFilter(''); }} className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-600 font-semibold rounded-lg hover:bg-gray-300">Clear</button>
+                <div>
+                    <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="All">All Unsubmitted</option>
+                        <option value="Open">Open</option>
+                        <option value="Closed">Closed</option>
+                        <option value="Submitted">Submitted</option>
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+                    <input type="date" id="date-filter" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <button onClick={() => { setStatusFilter('All'); setDateFilter(''); }} className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]">
+                     Clear Filters
+                 </button>
             </div>
-            <div className="bg-indigo-50 dark:bg-gray-700/50 p-4 rounded-lg text-center"><p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">Total for Filtered</p><p className="text-2xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mt-1">{formatTime(totalFilteredTimeMs)}</p></div>
+            <div className="bg-indigo-50 dark:bg-gray-700/50 p-4 rounded-lg text-center shadow-inner">
+                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">Total Time for Selected Filters</p>
+                <p className="text-2xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mt-1">{formatTime(totalFilteredTimeMs)}</p>
+            </div>
         </section>
 
-        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl mt-8">
-          <div className="flex justify-between items-center gap-4 mb-4 border-b pb-2">
-            <h2 className="flex items-center text-xl font-semibold"><List className="h-5 w-5 mr-2" />History</h2>
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
+          <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
             <div className="flex items-center gap-2">
-              {statusFilter==='Submitted' ? 
-                (<button type="button" onClick={(e) => { e.preventDefault(); handleMarkAsUnsubmitted(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 disabled:opacity-50">Unsubmit</button>) : 
-                (<button type="button" onClick={(e) => { e.preventDefault(); handleCreateDraft(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">AI Draft</button>)
-              }
-              <div className="relative">
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        const select = e.currentTarget.nextSibling;
-                        if(select && typeof select.showPicker === 'function') {
-                          select.showPicker();
-                        }
-                    }}
-                    disabled={isLoading}
-                    className="w-10 h-10 flex items-center justify-center bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-400"
-                    aria-label="Export CSV"
-                >
-                    <Download className="h-5 w-5 text-white" />
-                </button>
-                <select
-                    value={exportOption}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        setExportOption(val);
-                        handleExport(val);
-                    }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                >
-                    <option value="" disabled>Export CSV...</option>
-                    <option value="selected" disabled={isActionDisabled}>Export Selected</option>
-                    <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
-                    <option value="all" disabled={logs.length === 0}>Export All</option>
-                </select>
-              </div>
+                {statusFilter === 'Submitted' ? (
+                  <button 
+                    onClick={handleMarkAsUnsubmitted}
+                    disabled={isActionDisabled || isLoading}
+                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                  >
+                    Unsubmit
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleCreateDraft}
+                    disabled={isActionDisabled || isLoading}
+                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    AI Draft
+                  </button>
+                )}
+                <div className="relative">
+                    <select
+                        value={exportOption}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setExportOption(val);
+                            handleExport(val);
+                        }}
+                        disabled={isLoading}
+                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        aria-label="Export CSV"
+                    >
+                        <option value="" disabled>Export CSV...</option>
+                        <option value="selected" disabled={isActionDisabled}>Export Selected</option>
+                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
+                        <option value="all" disabled={logs.length === 0}>Export All</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                        <Download className="h-5 w-5" />
+                    </div>
+                </div>
             </div>
           </div>
-          <div className="flex items-center pb-4 border-b"><input type="checkbox" id="select-all" checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))} onChange={handleToggleSelectAll} disabled={!filteredAndGroupedLogs.length} className="h-5 w-5 rounded border-gray-300 text-indigo-600"/><label htmlFor="select-all" className="ml-2 text-sm font-medium">Select All Visible</label></div>
-          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">{filteredAndGroupedLogs.length === 0 ? <p className="text-center py-4">No logs match filters.</p> : filteredAndGroupedLogs.map(group => (<li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border"><div className="flex justify-between items-start mb-2 border-b pb-2"><div className="flex items-start flex-grow"><input type="checkbox" checked={selectedTickets.has(group.ticketId)} onChange={() => handleToggleSelectTicket(group.ticketId)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 mr-4 mt-1"/><div><div className="flex items-center gap-2">{editingTicketId === group.ticketId ? (<input type="text" value={editingTicketValue} onChange={(e) => setEditingTicketValue(e.target.value)} onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)} onKeyDown={(e) => {if (e.key === 'Enter') handleUpdateTicketId(group.ticketId, editingTicketValue); else if (e.key === 'Escape') setEditingTicketId(null);}} className="text-indigo-700 font-extrabold text-lg bg-indigo-50 rounded-md px-2" autoFocus/>) : (<><p className="text-indigo-700 font-extrabold text-lg break-all">{group.ticketId}</p>{group.sessions.every(s=>s.status==='submitted') && <Check className="w-5 h-5 text-green-500"/>}<button type="button" onClick={() => {setEditingTicketId(group.ticketId); setEditingTicketValue(group.ticketId);}} className="text-gray-400 hover:text-indigo-600"><Pencil className="w-4 h-4" /></button></>)}</div><p className="text-sm mt-1">Total: <span className="font-mono font-bold text-base">{formatTime(group.totalDurationMs)}</span></p></div></div><div className="flex flex-col space-y-2 mt-1">{group.isClosed ? (<><span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span><button type="button" onClick={(e) => handleReopenTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Re-open</span></button></>) : (<><button type="button" onClick={(e) => handleCloseTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Close</span></button><button type="button" onClick={(e) => handleContinueTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Continue</span></button></>)}</div></div><ul className="pl-3 space-y-2 mt-2 border-l-2">{group.sessions.sort((a,b) => b.endTime - a.endTime).map(session => (<li key={session.id} className="text-xs pt-1 pb-1"><div className="flex justify-between items-center gap-2"><div className="flex items-center gap-2"><input type="checkbox" checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)} onChange={() => handleToggleSelectSession(session.id)} className="h-4 w-4 rounded border-gray-300 text-indigo-600"/>{session.status==='submitted' && <Check className="h-4 w-4 text-green-500" />}<span className={`font-mono font-bold text-sm ${session.status==='submitted' ? 'text-gray-400' : ''}`}>{formatTime(session.accumulatedMs)}</span></div><span className="text-gray-500 text-right text-xs">{new Date(session.endTime).toLocaleDateString()}</span><button type="button" onClick={() => {setReallocatingSessionInfo({sessionId: session.id, currentTicketId: group.ticketId}); setIsReallocateModalOpen(true);}} disabled={isLoading} className="p-1 text-gray-400 hover:text-indigo-600"><CornerUpRight className="h-4 w-4" /></button><button type="button" onClick={(e) => handleDeleteClick(e, session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div>{session.note && <p className={`mt-1 flex items-start text-xs border-t pt-1 ${session.status==='submitted' ? 'text-gray-400' : 'text-gray-600'}`}><BookOpen className="h-3 w-3 mr-1 text-indigo-400 flex-shrink-0 mt-px"/><em>{session.note}</em></p>}</li>))}</ul></li>))}</ul>
+           <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
+                <input
+                    type="checkbox"
+                    id="select-all-checkbox"
+                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+                    onChange={handleToggleSelectAll}
+                    disabled={filteredAndGroupedLogs.length === 0}
+                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Select All Visible
+                </label>
+            </div>
+          {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
+          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
+            {filteredAndGroupedLogs.map((group) => {
+              const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+              return (
+              <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
+                   <div className="flex items-start flex-grow">
+                        <input
+                            type="checkbox"
+                            aria-label={`Select ticket ${group.ticketId}`}
+                            checked={selectedTickets.has(group.ticketId)}
+                            onChange={() => handleToggleSelectTicket(group.ticketId)}
+                            className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 mr-4 mt-1 self-start flex-shrink-0"
+                        />
+                        <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                                {editingTicketId === group.ticketId ? (
+                                    <input
+                                        type="text"
+                                        value={editingTicketValue}
+                                        onChange={(e) => setEditingTicketValue(e.target.value)}
+                                        onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                handleUpdateTicketId(group.ticketId, editingTicketValue);
+                                            } else if (e.key === 'Escape') {
+                                                setEditingTicketId(null);
+                                            }
+                                        }}
+                                        className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <>
+                                        <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
+                                        {isFullySubmitted && <Check className="w-5 h-5 text-green-500" title="All sessions submitted"/>}
+                                        <button 
+                                            onClick={() => {
+                                                setEditingTicketId(group.ticketId);
+                                                setEditingTicketValue(group.ticketId);
+                                            }}
+                                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                            title="Edit Ticket ID"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
+                            <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
+                        </div>
+                    </div>
+                  <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
+                    {group.isClosed ? (
+                        <>
+                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
+                            <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
+                                <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
+                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
+                            </button>
+                            <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
+                                <Repeat className="w-4 w-4" /><span>Start New Session</span>
+                            </button>
+                        </>
+                    )}
+                  </div>
+                </div>
+                <ul className="pl-3 space-y-2 mt-2 border-l-2 border-gray-300 dark:border-gray-600">
+                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
+                        <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
+                            <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        aria-label={`Select session ${session.id}`}
+                                        checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                                        onChange={() => handleToggleSelectSession(session.id)}
+                                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
+                                    <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
+                                </div>
+                                <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                <button 
+                                    onClick={() => {
+                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                                        setIsReallocateModalOpen(true);
+                                    }} 
+                                    disabled={isLoading} 
+                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
+                                    <CornerUpRight className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => handleDeleteClick(session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {session.note && (
+                                <p className={`mt-1 flex items-start text-xs border-t border-gray-200 dark:border-gray-600 pt-1 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    <BookOpen className="h-3 w-3 mr-1 text-indigo-400 dark:text-indigo-500 flex-shrink-0 mt-[2px]"/>
+                                    <span className="italic break-words">{session.note}</span>
+                                </p>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+              </li>
+              )
+            })}
+          </ul>
         </section>
       </div>
     </div>
@@ -1186,4 +1611,6 @@ ${combinedReport.trim()}
 };
 
 export default App;
+
+
 
