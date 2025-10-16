@@ -298,7 +298,6 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
@@ -513,12 +512,10 @@ const App = () => {
       }
 
       setIsLoading(false);
-      setHasLoadedOnce(true);
     }, (error) => {
       console.error('Firestore snapshot error:', error);
       setFirebaseError('Failed to load real-time data. Check console.');
       setIsLoading(false);
-      setHasLoadedOnce(true);
     });
 
     return () => unsubscribe();
@@ -1164,7 +1161,7 @@ ${combinedReport.trim()}
       }
       
       if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
+        if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
           return;
         }
 
@@ -1208,7 +1205,7 @@ ${combinedReport.trim()}
     );
   }
   
-  if (!isAuthReady || !hasLoadedOnce) {
+  if (isLoading || !isAuthReady) {
     return (
         <div className="flex justify-center items-center h-screen bg-gray-50">
             <Loader className="h-10 w-10 text-indigo-600 animate-spin" />
@@ -1382,28 +1379,6 @@ ${combinedReport.trim()}
           </div>
 
           <div className="flex space-x-3">
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-            <button type="button" onClick={actionHandler} disabled={isButtonDisabled} className={`flex-grow flex items-center justify-center space-x-2 py-4 rounded-xl font-bold text-lg ${actionStyle} disabled:opacity-50 disabled:cursor-not-allowed`}><ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span></button>
-            <button type="button" onClick={() => stopTimer(false)} disabled={isStopButtonDisabled} className="w-16 flex items-center justify-center py-4 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"><Square className="h-6 w-6" /></button>
-=======
-            <button
-              onClick={actionHandler}
-              disabled={isButtonDisabled}
-              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span>
-            </button>
-            <button
-              onClick={() => stopTimer(false)}
-              disabled={isStopButtonDisabled}
-              title="Stop and Finalize Activity"
-              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Square className="h-6 w-6" />
-            </button>
->>>>>>> Stashed changes
-=======
             <button
               onClick={actionHandler}
               disabled={isButtonDisabled || isLoading}
@@ -1419,7 +1394,6 @@ ${combinedReport.trim()}
             >
               {isLoading && !(isTimerRunning || isTimerPaused) ? <Loader className="h-6 w-6 animate-spin" /> : <Square className="h-6 w-6" />}
             </button>
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
                 <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
@@ -1458,88 +1432,6 @@ ${combinedReport.trim()}
           <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
             <div className="flex items-center gap-2">
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-              {statusFilter==='Submitted' ? 
-                (<button type="button" onClick={(e) => { e.preventDefault(); handleMarkAsUnsubmitted(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 disabled:opacity-50">Unsubmit</button>) : 
-                (<button type="button" onClick={(e) => { e.preventDefault(); handleCreateDraft(); }} disabled={isActionDisabled || isLoading} className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">AI Draft</button>)
-              }
-              <div className="relative">
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        const select = e.currentTarget.nextSibling;
-                        if(select && typeof select.showPicker === 'function') {
-                          select.showPicker();
-                        }
-                    }}
-                    disabled={isLoading}
-                    className="w-10 h-10 flex items-center justify-center bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-400"
-                    aria-label="Export CSV"
-                >
-                    <Download className="h-5 w-5 text-white" />
-                </button>
-                <select
-                    value={exportOption}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        setExportOption(val);
-                        handleExport(val);
-                    }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                >
-                    <option value="" disabled>Export CSV...</option>
-                    <option value="selected" disabled={isActionDisabled}>Export Selected</option>
-                    <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
-                    <option value="all" disabled={logs.length === 0}>Export All</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center pb-4 border-b"><input type="checkbox" id="select-all" checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))} onChange={handleToggleSelectAll} disabled={!filteredAndGroupedLogs.length} className="h-5 w-5 rounded border-gray-300 text-indigo-600"/><label htmlFor="select-all" className="ml-2 text-sm font-medium">Select All Visible</label></div>
-          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">{filteredAndGroupedLogs.length === 0 ? <p className="text-center py-4">No logs match filters.</p> : filteredAndGroupedLogs.map(group => (<li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border"><div className="flex justify-between items-start mb-2 border-b pb-2"><div className="flex items-start flex-grow"><input type="checkbox" checked={selectedTickets.has(group.ticketId)} onChange={() => handleToggleSelectTicket(group.ticketId)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 mr-4 mt-1"/><div><div className="flex items-center gap-2">{editingTicketId === group.ticketId ? (<input type="text" value={editingTicketValue} onChange={(e) => setEditingTicketValue(e.target.value)} onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)} onKeyDown={(e) => {if (e.key === 'Enter') handleUpdateTicketId(group.ticketId, editingTicketValue); else if (e.key === 'Escape') setEditingTicketId(null);}} className="text-indigo-700 font-extrabold text-lg bg-indigo-50 rounded-md px-2" autoFocus/>) : (<><p className="text-indigo-700 font-extrabold text-lg break-all">{group.ticketId}</p>{group.sessions.every(s=>s.status==='submitted') && <Check className="w-5 h-5 text-green-500"/>}<button type="button" onClick={() => {setEditingTicketId(group.ticketId); setEditingTicketValue(group.ticketId);}} className="text-gray-400 hover:text-indigo-600"><Pencil className="w-4 h-4" /></button></>)}</div><p className="text-sm mt-1">Total: <span className="font-mono font-bold text-base">{formatTime(group.totalDurationMs)}</span></p></div></div><div className="flex flex-col space-y-2 mt-1">{group.isClosed ? (<><span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span><button type="button" onClick={(e) => handleReopenTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Re-open</span></button></>) : (<><button type="button" onClick={(e) => handleCloseTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Close</span></button><button type="button" onClick={(e) => handleContinueTicket(e, group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg"><Repeat className="w-4 w-4" /><span>Continue</span></button></>)}</div></div><ul className="pl-3 space-y-2 mt-2 border-l-2">{group.sessions.sort((a,b) => b.endTime - a.endTime).map(session => (<li key={session.id} className="text-xs pt-1 pb-1"><div className="flex justify-between items-center gap-2"><div className="flex items-center gap-2"><input type="checkbox" checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)} onChange={() => handleToggleSelectSession(session.id)} className="h-4 w-4 rounded border-gray-300 text-indigo-600"/>{session.status==='submitted' && <Check className="h-4 w-4 text-green-500" />}<span className={`font-mono font-bold text-sm ${session.status==='submitted' ? 'text-gray-400' : ''}`}>{formatTime(session.accumulatedMs)}</span></div><span className="text-gray-500 text-right text-xs">{new Date(session.endTime).toLocaleDateString()}</span><button type="button" onClick={() => {setReallocatingSessionInfo({sessionId: session.id, currentTicketId: group.ticketId}); setIsReallocateModalOpen(true);}} disabled={isLoading} className="p-1 text-gray-400 hover:text-indigo-600"><CornerUpRight className="h-4 w-4" /></button><button type="button" onClick={(e) => handleDeleteClick(e, session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div>{session.note && <p className={`mt-1 flex items-start text-xs border-t pt-1 ${session.status==='submitted' ? 'text-gray-400' : 'text-gray-600'}`}><BookOpen className="h-3 w-3 mr-1 text-indigo-400 flex-shrink-0 mt-px"/><em>{session.note}</em></p>}</li>))}</ul></li>))}</ul>
-=======
-                {statusFilter === 'Submitted' ? (
-                  <button 
-                    onClick={handleMarkAsUnsubmitted}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
-                  >
-                    Unsubmit
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleCreateDraft}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                  >
-                    AI Draft
-                  </button>
-                )}
-                <div className="relative">
-                    <select
-                        value={exportOption}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setExportOption(val);
-                            handleExport(val);
-                        }}
-                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
-                        aria-label="Export CSV"
-                    >
-                        <option value="" disabled>Export CSV...</option>
-                        <option value="selected" disabled={isActionDisabled}>Export Selected</option>
-                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
-                        <option value="all" disabled={logs.length === 0}>Export All</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
-                        <Download className="h-5 w-5" />
-                    </div>
-                </div>
-            </div>
-          </div>
-=======
                 {statusFilter === 'Submitted' ? (
                   <button 
                     onClick={handleMarkAsUnsubmitted}
@@ -1580,7 +1472,6 @@ ${combinedReport.trim()}
                 </div>
             </div>
           </div>
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
            <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
                 <input
                     type="checkbox"
@@ -1652,27 +1543,16 @@ ${combinedReport.trim()}
                     {group.isClosed ? (
                         <>
                             <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-<<<<<<< HEAD
-                            <button onClick={() => handleReopenTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
-=======
                             <button onClick={() => handleReopenTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
                                 <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
                             </button>
                         </>
                     ) : (
                         <>
-<<<<<<< HEAD
-                            <button onClick={() => handleCloseTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
-                            </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
-=======
                             <button onClick={() => handleCloseTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
                                 <Lock className="w-4 h-4" /><span>Close Ticket</span>
                             </button>
                             <button onClick={() => handleContinueTicket(group.ticketId)} disabled={isLoading} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
                                 <Repeat className="w-4 w-4" /><span>Start New Session</span>
                             </button>
                         </>
@@ -1700,18 +1580,11 @@ ${combinedReport.trim()}
                                         setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
                                         setIsReallocateModalOpen(true);
                                     }} 
-<<<<<<< HEAD
-                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
-                                    <CornerUpRight className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => handleDeleteClick(session)} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
-=======
                                     disabled={isLoading} 
                                     className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
                                     <CornerUpRight className="h-4 w-4" />
                                 </button>
                                 <button onClick={() => handleDeleteClick(session)} disabled={isLoading} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
                                     <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
@@ -1728,10 +1601,6 @@ ${combinedReport.trim()}
               )
             })}
           </ul>
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> 787895ad1b26439009b0ba32d4ea6def58881efa
         </section>
       </div>
     </div>
