@@ -1161,7 +1161,7 @@ ${combinedReport.trim()}
       }
       
       if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0')) {
+        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0') || editingTicketId) {
           return;
         }
 
@@ -1175,7 +1175,7 @@ ${combinedReport.trim()}
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer]);
+  }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer, editingTicketId]);
 
 
   // --- Render Logic ---
@@ -1510,8 +1510,12 @@ ${combinedReport.trim()}
                                         onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
+                                                e.stopPropagation();
+                                                e.preventDefault();
                                                 handleUpdateTicketId(group.ticketId, editingTicketValue);
                                             } else if (e.key === 'Escape') {
+                                                e.stopPropagation();
+                                                e.preventDefault();
                                                 setEditingTicketId(null);
                                             }
                                         }}
