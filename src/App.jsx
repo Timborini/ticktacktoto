@@ -1460,7 +1460,7 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-green-500 text-transparent rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400"
+                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         aria-label="Export CSV"
                     >
                         <option value="" disabled>Export CSV...</option>
