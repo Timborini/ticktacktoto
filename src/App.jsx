@@ -555,6 +555,20 @@ const App = () => {
     setSelectedTickets(new Set());
     setSelectedSessions(new Set());
   }, [statusFilter, dateFilter]);
+
+  // --- Effect to close export dropdown when clicking outside ---
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportOption === 'menu' && !event.target.closest('.export-dropdown')) {
+        setExportOption('');
+      }
+    };
+
+    if (exportOption === 'menu') {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [exportOption]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1463,29 +1477,48 @@ ${combinedReport.trim()}
                     AI Draft
                   </button>
                 )}
-                <div className="relative">
-                    <select
-                        value={exportOption}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setExportOption(val);
-                            handleExport(val);
-                        }}
-                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        style={{
-                            backgroundColor: '#6366f1',
-                            color: 'transparent'
-                        }}
+                <div className="relative export-dropdown">
+                    <button
+                        onClick={() => setExportOption(exportOption ? '' : 'menu')}
+                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         aria-label="Export CSV"
                     >
-                        <option value="" disabled style={{backgroundColor: 'white', color: 'black'}}>Export CSV...</option>
-                        <option value="selected" disabled={isActionDisabled} style={{backgroundColor: 'white', color: 'black'}}>Export Selected</option>
-                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0} style={{backgroundColor: 'white', color: 'black'}}>Export Filtered</option>
-                        <option value="all" disabled={logs.length === 0} style={{backgroundColor: 'white', color: 'black'}}>Export All</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
                         <Download className="h-5 w-5" />
-                    </div>
+                    </button>
+                    {exportOption === 'menu' && (
+                        <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]">
+                            <button
+                                onClick={() => {
+                                    setExportOption('');
+                                    handleExport('selected');
+                                }}
+                                disabled={isActionDisabled}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Export Selected
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setExportOption('');
+                                    handleExport('filtered');
+                                }}
+                                disabled={filteredAndGroupedLogs.length === 0}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Export Filtered
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setExportOption('');
+                                    handleExport('all');
+                                }}
+                                disabled={logs.length === 0}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Export All
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
           </div>
