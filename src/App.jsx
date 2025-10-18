@@ -1460,7 +1460,10 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-indigo-50 dark:bg-gray-700/50 text-indigo-600 dark:text-indigo-300 rounded-lg hover:bg-indigo-100 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        style={{
+                            colorScheme: 'light'
+                        }}
                         aria-label="Export CSV"
                     >
                         <option value="" disabled>Export CSV...</option>
@@ -1468,7 +1471,7 @@ ${combinedReport.trim()}
                         <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
                         <option value="all" disabled={logs.length === 0}>Export All</option>
                     </select>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-indigo-600 dark:text-indigo-300">
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
                         <Download className="h-5 w-5" />
                     </div>
                 </div>
