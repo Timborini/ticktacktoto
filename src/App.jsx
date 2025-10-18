@@ -1460,10 +1460,7 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        style={{
-                            colorScheme: 'light'
-                        }}
+                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 [&>option]:bg-white [&>option]:text-gray-900 [&>option]:hover:bg-indigo-50"
                         aria-label="Export CSV"
                     >
                         <option value="" disabled>Export CSV...</option>
