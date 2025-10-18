@@ -12,10 +12,6 @@ import {
   getFirestore, collection, query, onSnapshot,
   doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
-import { setLogLevel } from 'firebase/firestore';
-
-// Set Firebase log level for debugging in the console
-setLogLevel('debug');
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = 'default-app-id'; 
@@ -472,7 +468,8 @@ const App = () => {
           endTime: data.endTime || null, 
           accumulatedMs: data.accumulatedMs || 0,
           note: data.note || '',
-          status: data.status || 'unsubmitted' // Add status field
+          status: data.status || 'unsubmitted', // Add status field
+          submissionDate: data.submissionDate?.toDate() || null
         };
 
         if (log.endTime === null) {
@@ -728,7 +725,6 @@ const App = () => {
     if (!getCollectionRef || finalTicketId.trim() === '') return;
     
     if (ticketStatuses[finalTicketId]?.isClosed) {
-        console.log(`Cannot start session for closed ticket: ${finalTicketId}`);
         return; 
     }
 
@@ -885,7 +881,10 @@ const App = () => {
     try {
         finalSessionIds.forEach(sessionId => {
             const docRef = doc(getCollectionRef, sessionId);
-            batch.update(docRef, { status: 'submitted' });
+            batch.update(docRef, { 
+              status: 'submitted',
+              submissionDate: new Date()
+            });
         });
         await batch.commit();
         setSelectedTickets(new Set()); // Clear selections
@@ -917,7 +916,10 @@ const App = () => {
     try {
         finalSessionIds.forEach(sessionId => {
             const docRef = doc(getCollectionRef, sessionId);
-            batch.update(docRef, { status: 'unsubmitted' });
+            batch.update(docRef, { 
+              status: 'unsubmitted',
+              submissionDate: null
+            });
         });
         await batch.commit();
         setSelectedTickets(new Set()); // Clear selections
@@ -1002,7 +1004,6 @@ ${combinedReport.trim()}
     switch (exportType) {
       case 'selected':
         if (selectedTickets.size === 0 && selectedSessions.size === 0) {
-          console.log('Export skipped: No items selected.');
           setExportOption('');
           return;
         }
@@ -1042,7 +1043,6 @@ ${combinedReport.trim()}
     }
 
     if (logsToExport.length === 0) {
-      console.log(`Export skipped: No logs for type "${exportType}".`);
       setExportOption('');
       return;
     }
@@ -1491,6 +1491,9 @@ ${combinedReport.trim()}
           <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+              const submissionDate = isFullySubmitted 
+                ? Math.max(...group.sessions.map(s => s.submissionDate?.getTime() || 0)) 
+                : null;
               return (
               <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
@@ -1543,6 +1546,11 @@ ${combinedReport.trim()}
                             </div>
                             <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
                             <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
+                            {submissionDate && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Submitted on: {new Date(submissionDate).toLocaleDateString()}
+                              </p>
+                            )}
                         </div>
                     </div>
                   <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
