@@ -1460,13 +1460,17 @@ ${combinedReport.trim()}
                             setExportOption(val);
                             handleExport(val);
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 [&>option]:bg-white [&>option]:text-gray-900 [&>option]:hover:bg-indigo-50"
+                        className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-transparent rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        style={{
+                            backgroundColor: '#6366f1',
+                            color: 'transparent'
+                        }}
                         aria-label="Export CSV"
                     >
-                        <option value="" disabled>Export CSV...</option>
-                        <option value="selected" disabled={isActionDisabled}>Export Selected</option>
-                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0}>Export Filtered</option>
-                        <option value="all" disabled={logs.length === 0}>Export All</option>
+                        <option value="" disabled style={{backgroundColor: 'white', color: 'black'}}>Export CSV...</option>
+                        <option value="selected" disabled={isActionDisabled} style={{backgroundColor: 'white', color: 'black'}}>Export Selected</option>
+                        <option value="filtered" disabled={filteredAndGroupedLogs.length === 0} style={{backgroundColor: 'white', color: 'black'}}>Export Filtered</option>
+                        <option value="all" disabled={logs.length === 0} style={{backgroundColor: 'white', color: 'black'}}>Export All</option>
                     </select>
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
                         <Download className="h-5 w-5" />
