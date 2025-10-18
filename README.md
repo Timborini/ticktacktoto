@@ -1,4 +1,32 @@
-# Getting Started with Create React App
+# TickTackToto - Time Tracker App
+
+A slick ticket time tracker built with React and Firebase.
+
+## Environment Setup
+
+This app requires Firebase configuration to be set up via environment variables for security.
+
+### Local Development
+
+1. Create a `.env` file in the project root with the following variables:
+
+```env
+REACT_APP_FIREBASE_API_KEY=your_api_key_here
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your_project_id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
+REACT_APP_FIREBASE_APP_ID=your_app_id_here
+REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+```
+
+2. Replace the placeholder values with your actual Firebase project configuration.
+
+### Deployment
+
+For production deployment (e.g., Netlify), set these same environment variables in your deployment platform's environment settings.
+
+## Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
