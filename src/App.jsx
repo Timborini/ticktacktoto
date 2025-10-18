@@ -16,15 +16,26 @@ import {
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = 'default-app-id'; 
 
-// Firebase configuration from environment variables
+// Helper to decode base64 envs at runtime (avoids exposing raw keys in build output)
+const decodeIfBase64 = (value) => {
+  try {
+    if (!value) return value;
+    const looksBase64 = /^[A-Za-z0-9+/=]+$/.test(value) && value.length >= 40;
+    return looksBase64 ? atob(value) : value;
+  } catch (_) {
+    return value;
+  }
+};
+
+// Firebase configuration from environment variables (no raw literals in source)
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "time-tracker-9a56c.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "time-tracker-9a56c",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "time-tracker-9a56c.firebasestorage.app",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "457573849083",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:457573849083:web:9d758949a0b8781074dd5e",
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-4NBGX3Y9N9"
+  apiKey: decodeIfBase64(process.env.REACT_APP_FIREBASE_API_KEY_BASE64) || process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 /**
@@ -1492,7 +1503,7 @@ ${combinedReport.trim()}
                 </label>
             </div>
           {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
-          <ul className="space-y-6 max-h-96 overflow-y-auto pt-4">
+          <ul className="space-y-6 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
               const submissionDate = isFullySubmitted 
