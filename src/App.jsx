@@ -16,15 +16,15 @@ import {
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = 'default-app-id'; 
 
-// This has been updated with your specific Firebase configuration.
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug",
-  authDomain: "time-tracker-9a56c.firebaseapp.com",
-  projectId: "time-tracker-9a56c",
-  storageBucket: "time-tracker-9a56c.firebasestorage.app",
-  messagingSenderId: "457573849083",
-  appId: "1:457573849083:web:9d758949a0b8781074dd5e",
-  measurementId: "G-4NBGX3Y9N9"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 /**
