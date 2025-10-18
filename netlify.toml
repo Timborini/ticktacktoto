@@ -1,0 +1,8 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  # Firebase API keys are public identifiers, not secret keys
+  # They're designed to be included in client-side code
+  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug"
