@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
-const appId = 'default-app-id'; 
+const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id'; 
 
 // Helper to decode base64 envs at runtime (avoids exposing raw keys in build output)
 const decodeIfBase64 = (value) => {
