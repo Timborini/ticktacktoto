@@ -3,15 +3,10 @@
   publish = "build"
 
 [build.environment]
-  # Firebase API keys are public identifiers, not secret keys
-  # They're designed to be included in client-side code
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug"
+  # Firebase Configuration - Set these in Netlify dashboard environment variables
+  # Never commit actual API keys to version control
+  # Use the Web API key from Firebase Console: AIzaSyDPHHj48jXDTeCS_uuZLD0JombGpzyJk_0
   
-  # Firebase Configuration
-  REACT_APP_FIREBASE_API_KEY = "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug"
-  REACT_APP_FIREBASE_AUTH_DOMAIN = "time-tracker-9a56c.firebaseapp.com"
-  REACT_APP_FIREBASE_PROJECT_ID = "time-tracker-9a56c"
-  REACT_APP_FIREBASE_STORAGE_BUCKET = "time-tracker-9a56c.firebasestorage.app"
-  REACT_APP_FIREBASE_MESSAGING_SENDER_ID = "457573849083"
-  REACT_APP_FIREBASE_APP_ID = "1:457573849083:web:9d758949a0b8781074dd5e"
-  REACT_APP_FIREBASE_MEASUREMENT_ID = "G-4NBGX3Y9N9"
+  # Configure secrets scanning to ignore Firebase configuration values
+  # These are public configuration values, not secret keys
+  SECRETS_SCAN_OMIT_KEYS = "REACT_APP_FIREBASE_API_KEY,REACT_APP_FIREBASE_AUTH_DOMAIN,REACT_APP_FIREBASE_PROJECT_ID,REACT_APP_FIREBASE_STORAGE_BUCKET,REACT_APP_FIREBASE_MESSAGING_SENDER_ID,REACT_APP_FIREBASE_APP_ID,REACT_APP_FIREBASE_MEASUREMENT_ID"
