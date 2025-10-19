@@ -3,12 +3,8 @@
   publish = "build"
 
 [build.environment]
-  # Firebase API keys are public identifiers, not secret keys
-  # They're designed to be included in client-side code
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug"
-  
-  # Firebase Configuration
-  REACT_APP_FIREBASE_API_KEY = "AIzaSyDLpi8kG36WLf0gn5-UBTkyu1f1wNSW4ug"
+  # Firebase Configuration - Set these in Netlify dashboard environment variables
+  # Never commit actual API keys to version control
   REACT_APP_FIREBASE_AUTH_DOMAIN = "time-tracker-9a56c.firebaseapp.com"
   REACT_APP_FIREBASE_PROJECT_ID = "time-tracker-9a56c"
   REACT_APP_FIREBASE_STORAGE_BUCKET = "time-tracker-9a56c.firebasestorage.app"
