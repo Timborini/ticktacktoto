@@ -18,6 +18,7 @@ REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
 REACT_APP_FIREBASE_APP_ID=default-app-id
 REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+REACT_APP_GOOGLE_CLIENT_ID=your_google_oauth_client_id
 ```
 
 2. Replace the placeholder values with your actual Firebase project configuration.
@@ -25,6 +26,16 @@ REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
 ### Deployment
 
 For production deployment (e.g., Netlify), set these same environment variables in your deployment platform's environment settings.
+
+### Google Sheets Export Setup
+
+To enable Google Sheets export:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable Google Sheets API and Google Drive API
+3. Create OAuth 2.0 credentials (Web application type)
+4. Add authorized JavaScript origins: `http://localhost:3000` and your production domain
+5. Copy the Client ID to your `.env` file as `REACT_APP_GOOGLE_CLIENT_ID`
 
 ## Getting Started with Create React App
 
