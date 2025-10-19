@@ -5,6 +5,7 @@
 [build.environment]
   # Firebase Configuration - Set these in Netlify dashboard environment variables
   # Never commit actual API keys to version control
+  # Use the Web API key from Firebase Console: AIzaSyDPHHj48jXDTeCS_uuZLD0JombGpzyJk_0
   REACT_APP_FIREBASE_AUTH_DOMAIN = "time-tracker-9a56c.firebaseapp.com"
   REACT_APP_FIREBASE_PROJECT_ID = "time-tracker-9a56c"
   REACT_APP_FIREBASE_STORAGE_BUCKET = "time-tracker-9a56c.firebasestorage.app"
