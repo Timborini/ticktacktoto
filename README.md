@@ -16,7 +16,7 @@ REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
 REACT_APP_FIREBASE_PROJECT_ID=your_project_id
 REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
-REACT_APP_FIREBASE_APP_ID=your_app_id_here
+REACT_APP_FIREBASE_APP_ID=default-app-id
 REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
 ```
 
