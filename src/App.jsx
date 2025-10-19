@@ -38,6 +38,7 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
+
 /**
  * Utility function to format milliseconds into HH:MM:SS
  * @param {number} ms - Milliseconds
@@ -370,6 +371,7 @@ const App = () => {
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
 
+
       setDb(firestore);
       setAuth(userAuth);
 
@@ -462,6 +464,7 @@ const App = () => {
   // --- Real-time Log Listener (onSnapshot) ---
   useEffect(() => {
     if (!isAuthReady || !getCollectionRef) return;
+    
     
     setIsLoading(true);
     const q = query(getCollectionRef);
