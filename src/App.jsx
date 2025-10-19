@@ -1079,12 +1079,13 @@ ${combinedReport.trim()}
     const filename = `${reportName}-${today}.csv`;
 
     try {
-      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Duration (ms)", "Note", "Finished Date/Time", "Session ID", "Status"];
+      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status"];
       const csvRows = logsToExport.map(log => {
         const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
         const formattedDuration = formatTime(log.accumulatedMs);
+        const startTime = log.startTime ? new Date(log.startTime).toLocaleString('en-US') : 'N/A';
         const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-        return [escape(log.ticketId), escape(formattedDuration), log.accumulatedMs, escape(log.note || ''), escape(finishTime), escape(log.id), escape(log.status)].join(',');
+        return [escape(log.ticketId), escape(formattedDuration), escape(log.note || ''), escape(startTime), escape(finishTime), escape(log.id), escape(log.status)].join(',');
       });
 
       const csvContent = [headers.join(','), ...csvRows].join('\n');
