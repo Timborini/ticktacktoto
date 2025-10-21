@@ -314,9 +314,7 @@ const App = () => {
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
-  const [googleAccessToken, setGoogleAccessToken] = useState(null);
-  const [isGsiLoaded, setIsGsiLoaded] = useState(false);
-  const [exportFormatMenu, setExportFormatMenu] = useState(null); // 'selected', 'filtered', 'all', or null
+  const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
 
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -399,17 +397,6 @@ const App = () => {
     }
   }, []);
 
-  // --- Initialize Google Identity Services ---
-  useEffect(() => {
-    const initializeGsi = () => {
-      if (window.google?.accounts?.oauth2) {
-        setIsGsiLoaded(true);
-      } else {
-        setTimeout(initializeGsi, 100);
-      }
-    };
-    initializeGsi();
-  }, []);
 
   const handleGoogleLogin = async () => {
     if (!auth) return;
@@ -431,116 +418,6 @@ const App = () => {
     }
   };
 
-  // --- Google Sheets Authentication ---
-  const requestGoogleSheetsAccess = useCallback(() => {
-    return new Promise((resolve, reject) => {
-      if (!window.google?.accounts?.oauth2) {
-        reject(new Error('Google Identity Services not loaded'));
-        return;
-      }
-
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
-        callback: (response) => {
-          if (response.access_token) {
-            setGoogleAccessToken(response.access_token);
-            resolve(response.access_token);
-          } else {
-            reject(new Error('Failed to get access token'));
-          }
-        },
-        error_callback: (error) => {
-          reject(error);
-        }
-      });
-
-      client.requestAccessToken();
-    });
-  }, []);
-
-  // --- Google Sheets API Functions ---
-  const createGoogleSheet = useCallback(async (sheetName, data) => {
-    if (!googleAccessToken) {
-      throw new Error('No access token available');
-    }
-
-    // Step 1: Create the spreadsheet
-    const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${googleAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        properties: { title: sheetName },
-        sheets: [{ properties: { title: 'Time Tracking Data' } }]
-      })
-    });
-
-    if (!createResponse.ok) {
-      throw new Error('Failed to create spreadsheet');
-    }
-
-    const spreadsheet = await createResponse.json();
-    const spreadsheetId = spreadsheet.spreadsheetId;
-
-    // Step 2: Populate with data
-    const headers = ['Ticket ID', 'Duration (HH:MM:SS)', 'Note', 'Start Date/Time', 'Finished Date/Time', 'Session ID', 'Status'];
-    const rows = data.map(log => [
-      log.ticketId,
-      formatTime(log.accumulatedMs),
-      log.note || '',
-      log.startTime ? new Date(log.startTime).toLocaleString('en-US') : 'N/A',
-      log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A',
-      log.id,
-      log.status
-    ]);
-
-    const values = [headers, ...rows];
-
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:G${values.length}?valueInputOption=RAW`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${googleAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ values })
-    });
-
-    // Step 3: Format the header row
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${googleAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            repeatCell: {
-              range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
-              cell: {
-                userEnteredFormat: {
-                  backgroundColor: { red: 0.4, green: 0.5, blue: 0.9 },
-                  textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
-                  horizontalAlignment: 'CENTER'
-                }
-              },
-              fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
-            }
-          },
-          {
-            autoResizeDimensions: {
-              dimensions: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 7 }
-            }
-          }
-        ]
-      })
-    });
-
-    return spreadsheet;
-  }, [googleAccessToken]);
 
   // --- Firestore Data Path Helpers ---
   const getCollectionRef = useMemo(() => {
@@ -607,7 +484,8 @@ const App = () => {
           accumulatedMs: data.accumulatedMs || 0,
           note: data.note || '',
           status: data.status || 'unsubmitted', // Add status field
-          submissionDate: data.submissionDate?.toDate() || null
+          submissionDate: data.submissionDate?.toDate() || null,
+          createdAt: data.createdAt || null // Track when session was originally created
         };
 
         if (log.endTime === null) {
@@ -836,7 +714,8 @@ const App = () => {
             endTime: null,
             accumulatedMs: 0,
             note: note.trim(),
-            status: 'unsubmitted' // Default status
+            status: 'unsubmitted', // Default status
+            createdAt: startTimestamp // Track when session was originally created
         };
         await addDoc(getCollectionRef, newEntry);
     } catch (error) {
@@ -1017,12 +896,19 @@ const App = () => {
 
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
+    
+    // Add from selected tickets
     selectedTickets.forEach(ticketId => {
         logs.forEach(log => {
             if (log.ticketId === ticketId) {
                 finalSessionIds.add(log.id);
             }
         });
+    });
+
+    // Add from exported sessions
+    exportedSessionIds.forEach(sessionId => {
+        finalSessionIds.add(sessionId);
     });
 
     if (finalSessionIds.size === 0 || !getCollectionRef) return;
@@ -1041,6 +927,7 @@ const App = () => {
         await batch.commit();
         setSelectedTickets(new Set()); // Clear selections
         setSelectedSessions(new Set());
+        setExportedSessionIds(new Set()); // Clear exported session IDs
     } catch (error) {
         console.error("Error marking sessions as submitted:", error);
         setFirebaseError("Failed to mark sessions as submitted.");
@@ -1048,7 +935,7 @@ const App = () => {
         setIsLoading(false);
         setIsConfirmingSubmit(false);
     }
-}, [selectedTickets, selectedSessions, logs, getCollectionRef, db]);
+}, [selectedTickets, selectedSessions, exportedSessionIds, logs, getCollectionRef, db]);
 
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
@@ -1147,18 +1034,17 @@ ${combinedReport.trim()}
   };
 
 
-  const handleExport = useCallback(async (exportType, format = 'csv') => {
+  const handleExport = useCallback(async (exportType) => {
     if (!exportType) return;
 
     let logsToExport = [];
     let reportName = 'time-report';
 
-    // Existing data selection logic (keep as-is)
+    // Data selection logic
     switch (exportType) {
       case 'selected':
         if (selectedTickets.size === 0 && selectedSessions.size === 0) {
           setExportOption('');
-          setExportFormatMenu(null);
           return;
         }
         
@@ -1192,74 +1078,53 @@ ${combinedReport.trim()}
       
       default:
         setExportOption('');
-        setExportFormatMenu(null);
         return;
     }
 
     if (logsToExport.length === 0) {
       setExportOption('');
-      setExportFormatMenu(null);
       return;
     }
 
     const today = new Date().toISOString().split('T')[0];
 
     try {
-      if (format === 'sheets') {
-        // Google Sheets Export
-        if (!user || user.isAnonymous) {
-          setFirebaseError('Please sign in with Google to export to Google Sheets.');
-          setExportOption('');
-          setExportFormatMenu(null);
-          return;
-        }
+      // CSV Export
+      const filename = `${reportName}-${today}.csv`;
+      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
+      const csvRows = logsToExport.map(log => {
+        const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
+        const formattedDuration = formatTime(log.accumulatedMs);
+        const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
+        const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
+        const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
+        return [escape(log.ticketId), escape(formattedDuration), escape(log.note || ''), escape(startTime), escape(finishTime), escape(log.id), escape(log.status), escape(submissionDate)].join(',');
+      });
 
-        let token = googleAccessToken;
-        if (!token) {
-          token = await requestGoogleSheetsAccess();
-        }
+      const csvContent = [headers.join(','), ...csvRows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-        const sheetName = `${reportName}-${today}`;
-        const spreadsheet = await createGoogleSheet(sheetName, logsToExport);
-        
-        // Open in new tab
-        window.open(`https://docs.google.com/spreadsheets/d/${spreadsheet.spreadsheetId}`, '_blank');
-        
-        // Show success message
-        setFirebaseError(`Google Sheet created: ${sheetName}`);
-        setTimeout(() => setFirebaseError(null), 5000);
-
-      } else {
-        // CSV Export (existing logic)
-        const filename = `${reportName}-${today}.csv`;
-        const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status"];
-        const csvRows = logsToExport.map(log => {
-          const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
-          const formattedDuration = formatTime(log.accumulatedMs);
-          const startTime = log.startTime ? new Date(log.startTime).toLocaleString('en-US') : 'N/A';
-          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-          return [escape(log.ticketId), escape(formattedDuration), escape(log.note || ''), escape(startTime), escape(finishTime), escape(log.id), escape(log.status)].join(',');
-        });
-
-        const csvContent = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      // Track exported session IDs and prompt for submission if not already submitted
+      const exportedIds = new Set(logsToExport.filter(log => log.status !== 'submitted').map(log => log.id));
+      if (exportedIds.size > 0 && statusFilter !== 'Submitted') {
+        setExportedSessionIds(exportedIds);
+        setIsConfirmingSubmit(true);
       }
     } catch (error) {
       console.error('Export Failed:', error);
       setFirebaseError(`Export failed: ${error.message}`);
     } finally {
       setExportOption('');
-      setExportFormatMenu(null);
     }
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, googleAccessToken, user, requestGoogleSheetsAccess, createGoogleSheet]);
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
 
   const handleToggleSelectTicket = (ticketId) => {
     setSelectedTickets(prevSelected => {
@@ -1415,9 +1280,15 @@ ${combinedReport.trim()}
       <ConfirmationModal
         isOpen={isConfirmingSubmit}
         title="Mark as Submitted?"
-        message={`This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`}
+        message={exportedSessionIds.size > 0 
+          ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
+          : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
+        }
         onConfirm={handleMarkAsSubmitted}
-        onCancel={() => setIsConfirmingSubmit(false)}
+        onCancel={() => {
+          setIsConfirmingSubmit(false);
+          setExportedSessionIds(new Set());
+        }}
         confirmText="Mark as Submitted"
       />
       <ReportModal
@@ -1638,66 +1509,35 @@ ${combinedReport.trim()}
                 )}
                 <div className="relative export-dropdown">
                   <button
-                    onClick={() => {
-                      setExportOption(exportOption ? '' : 'menu');
-                      setExportFormatMenu(null);
-                    }}
+                    onClick={() => setExportOption(exportOption ? '' : 'menu')}
                     className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     aria-label="Export"
                   >
                     <Download className="h-5 w-5" />
                   </button>
                   
-                  {/* Level 1: Data Selection */}
-                  {exportOption === 'menu' && !exportFormatMenu && (
+                  {exportOption === 'menu' && (
                     <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]">
                       <button
-                        onClick={() => setExportFormatMenu('selected')}
+                        onClick={() => handleExport('selected')}
                         disabled={isActionDisabled}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg"
                       >
-                        Export Selected →
+                        Export Selected
                       </button>
                       <button
-                        onClick={() => setExportFormatMenu('filtered')}
+                        onClick={() => handleExport('filtered')}
                         disabled={filteredAndGroupedLogs.length === 0}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Export Filtered →
+                        Export Filtered
                       </button>
                       <button
-                        onClick={() => setExportFormatMenu('all')}
+                        onClick={() => handleExport('all')}
                         disabled={logs.length === 0}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg"
                       >
-                        Export All →
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* Level 2: Format Selection */}
-                  {exportFormatMenu && (
-                    <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]">
-                      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-600">
-                        <button
-                          onClick={() => setExportFormatMenu(null)}
-                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                        >
-                          ← Back
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => handleExport(exportFormatMenu, 'csv')}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        📄 Download CSV
-                      </button>
-                      <button
-                        onClick={() => handleExport(exportFormatMenu, 'sheets')}
-                        disabled={!isGsiLoaded}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg"
-                      >
-                        📊 Create Google Sheet
+                        Export All
                       </button>
                     </div>
                   )}
