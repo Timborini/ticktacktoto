@@ -240,7 +240,8 @@ const InstructionsContent = () => (
          <div>
             <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Keyboard Shortcuts:</h4>
              <ul className="list-disc list-inside space-y-1">
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume timer.</li>
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</li>
+                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Ctrl + Space</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Space</span>: Start / Pause / Resume timer (works everywhere, even while typing notes).</li>
                 <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt + Enter</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Enter</span>: Stop and finalize the current entry.</li>
             </ul>
         </div>
@@ -1204,6 +1205,15 @@ ${combinedReport.trim()}
     const handleKeyDown = (event) => {
       const activeTag = document.activeElement.tagName;
 
+      // Ctrl/Cmd + Space: Global timer toggle (works even in text fields)
+      if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        if (actionHandler && !isButtonDisabled) {
+          actionHandler();
+        }
+        return;
+      }
+
       if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
         event.preventDefault();
         if (!isStopButtonDisabled) {
@@ -1455,8 +1465,9 @@ ${combinedReport.trim()}
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
                 <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
-                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Enter</span>: Start / Pause / Resume timer.</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Alt + Enter</span>: Stop and finalize the current entry.</p>
+                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</p>
+                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl/Cmd + Space</span>: Start / Pause / Resume timer (works everywhere).</p>
+                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Alt/Cmd + Enter</span>: Stop and finalize the current entry.</p>
            </div>
         </section>
 
