@@ -345,33 +345,87 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
 };
 
 const InstructionsContent = () => (
-    <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+    <div className="space-y-5 text-sm text-gray-700 dark:text-gray-300">
         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Core Features:</h4>
-            <ul className="list-disc list-inside space-y-1">
-                <li><strong>Start/Stop Timer:</strong> Enter a ticket ID and hit 'START'. The timer will run until you PAUSE or STOP.</li>
-                <li><strong>Session Notes:</strong> Add notes to your running session. They are saved when you pause or stop.</li>
-                <li><strong>Inline Ticket Editing:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1"/> icon next to a ticket ID to rename it across all its sessions.</li>
-                <li><strong>Session Reallocation:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1"/> icon on a session to move it to a different ticket.</li>
-                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed), date, or view 'Submitted' tickets.</li>
-                <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' to archive them, or 'Re-open' them if you need to track more time.</li>
-                <li><strong>Export Data:</strong> Export all logs, filtered logs, or selected logs to a CSV file.</li>
+            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
+                <Clock className="w-4 h-4 mr-2" />
+                Getting Started
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>Start Timer:</strong> Enter a ticket ID (e.g., PROJ-123) and optional notes, then click 'START' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd>.</li>
+                <li><strong>Autocomplete:</strong> Recent ticket IDs appear as suggestions when you start typing.</li>
+                <li><strong>Timer Notifications:</strong> Get alerts at 30min, 1hr, 2hr, and 4hr milestones.</li>
+                <li><strong>Pause/Resume:</strong> Click 'PAUSE' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd> to pause; press again to resume.</li>
+                <li><strong>Stop Timer:</strong> Click 'STOP' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Alt+Enter</kbd> to finalize your session.</li>
             </ul>
         </div>
+
         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
-            <ul className="list-disc list-inside space-y-1">
-                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "AI Draft" button at the top of the history section.</li>
-                <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
-                <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
+            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
+                <List className="w-4 h-4 mr-2" />
+                Managing Your Time Logs
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>Edit Ticket IDs:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1 text-blue-500"/> icon to rename a ticket across all its sessions.</li>
+                <li><strong>Reallocate Sessions:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1 text-purple-500"/> icon to move a session to a different ticket.</li>
+                <li><strong>Delete Sessions:</strong> Click the <Trash2 className="w-4 h-4 inline-block -mt-1 text-red-500"/> icon to remove unwanted sessions.</li>
+                <li><strong>Close Tickets:</strong> Mark tickets as 'Closed' to archive them (they'll be filtered out by default).</li>
             </ul>
         </div>
-         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Keyboard Shortcuts:</h4>
-             <ul className="list-disc list-inside space-y-1">
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</li>
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Ctrl + Space</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Space</span>: Start / Pause / Resume timer (works everywhere, even while typing notes).</li>
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt + Enter</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Enter</span>: Stop and finalize the current entry.</li>
+
+        <div>
+            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Statistics & Insights
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>Dashboard:</strong> View total time, submitted vs unsubmitted counts, and average session time at a glance.</li>
+                <li><strong>Real-Time Updates:</strong> All statistics update automatically as you track time.</li>
+                <li><strong>Filter Statistics:</strong> Use date ranges and search to analyze specific periods or tickets.</li>
+            </ul>
+        </div>
+
+        <div>
+            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
+                <Check className="w-4 h-4 mr-2" />
+                Advanced Features
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><strong>Search:</strong> Use the search box to quickly find tickets by ID.</li>
+                <li><strong>Date Filters:</strong> Filter by date range or use quick buttons (Today, Last 7 Days, Last 30 Days).</li>
+                <li><strong>Bulk Operations:</strong> Select multiple sessions to delete or change status all at once.</li>
+                <li><strong>Export Options:</strong> Download CSV files with selected, filtered, or all time entries.</li>
+                <li><strong>AI Draft:</strong> Select tickets/sessions and click "AI Draft" to generate a formatted summary for reports.</li>
+                <li><strong>Share Filters:</strong> Your filter settings are saved in the URL - share links to specific views!</li>
+            </ul>
+        </div>
+
+        <div>
+            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
+                <Keyboard className="w-4 h-4 mr-2" />
+                Keyboard Shortcuts
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd> - Start/Pause/Resume timer (when not typing)</li>
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Ctrl+Space</kbd> or <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Cmd+Space</kbd> - Start/Pause/Resume (works everywhere)</li>
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Alt+Enter</kbd> or <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Cmd+Enter</kbd> - Stop timer</li>
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">↑/↓</kbd> - Navigate export dropdown options</li>
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Esc</kbd> - Close modals and dropdowns</li>
+                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Tab</kbd> - Navigate between elements</li>
+            </ul>
+        </div>
+
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
+            <h4 className="font-bold text-indigo-700 dark:text-indigo-300 mb-1 flex items-center">
+                <Info className="w-4 h-4 mr-2" />
+                Pro Tips
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-2 text-xs">
+                <li>Your profile and recent tickets are saved locally - no need to re-enter them!</li>
+                <li>Character counters show input limits (200 for ticket ID, 5000 for notes).</li>
+                <li>Use bulk operations to manage multiple sessions efficiently.</li>
+                <li>The statistics dashboard helps you track productivity over time.</li>
+                <li>All your data syncs to Firebase - accessible from any device with the same account.</li>
             </ul>
         </div>
     </div>
