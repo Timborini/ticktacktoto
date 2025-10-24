@@ -13,6 +13,9 @@ import {
   doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
 
+// --- Toast Notifications ---
+import toast, { Toaster } from 'react-hot-toast';
+
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id'; 
 
@@ -98,32 +101,67 @@ const escapeCSV = (data) => {
 };
 
 /**
- * Custom Confirmation Modal Component
+ * Custom Confirmation Modal Component with Accessibility
  */
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
+    const confirmButtonRef = useRef(null);
+
+    // Focus management and Escape key handler
+    useEffect(() => {
+        if (isOpen) {
+            // Focus the confirm button when modal opens
+            setTimeout(() => confirmButtonRef.current?.focus(), 100);
+
+            // Handle Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onCancel();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onCancel]);
+
     if (!isOpen) return null;
 
     const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onCancel}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4"
+            onClick={(e) => {
+                // Only close on backdrop click for non-destructive actions
+                if (e.target === e.currentTarget && confirmText !== "Delete") {
+                    onCancel();
+                }
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+                aria-describedby="modal-description"
                 className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}>{title}</h3>
-                <div className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
+                <h3 
+                    id="modal-title"
+                    className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
+                >
+                    {title}
+                </h3>
+                <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
                 <div className="flex justify-end space-x-3">
                     <button
                         onClick={onCancel}
-                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
                     </button>
                     <button
+                        ref={confirmButtonRef}
                         onClick={onConfirm}
-                        className={`flex items-center space-x-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
+                        className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
                     >
                         <Check className="w-4 h-4" />
                         <span>{confirmText}</span>
@@ -136,19 +174,30 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
 
 const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm }) => {
     const [newTicketId, setNewTicketId] = useState('');
+    const selectRef = useRef(null);
 
     useEffect(() => {
         // Reset selection when modal opens or session changes
         if (isOpen) {
             setNewTicketId('');
+            // Focus the select element when modal opens
+            setTimeout(() => selectRef.current?.focus(), 100);
+
+            // Handle Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
         }
-    }, [isOpen, sessionInfo]);
+    }, [isOpen, sessionInfo, onClose]);
 
     if (!isOpen || !sessionInfo) return null;
 
     const handleConfirm = () => {
         if (newTicketId && newTicketId !== sessionInfo.currentTicketId) {
             onConfirm(sessionInfo.sessionId, newTicketId);
+            onClose();
         }
     };
 
@@ -156,13 +205,24 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reallocate-title"
+                aria-describedby="reallocate-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Reallocate Session</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                    Reallocate Session
+                </h3>
+                <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
                     Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
                 </p>
 
@@ -172,10 +232,11 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                             New Ticket ID
                         </label>
                         <select
+                            ref={selectRef}
                             id="ticket-reallocate"
                             value={newTicketId}
                             onChange={(e) => setNewTicketId(e.target.value)}
-                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                         >
                             <option value="" disabled>Select a ticket...</option>
                             {availableTickets.map(ticketId => (
@@ -185,10 +246,10 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                     </div>
                 </div>
                 
-                <div className="mt-8 flex justify-end space-x-3">
+                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
@@ -196,7 +257,7 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                     <button
                         onClick={handleConfirm}
                         disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
-                        className="flex items-center space-x-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50"
+                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4" />
                         <span>Confirm Reallocation</span>
@@ -208,6 +269,20 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
 };
 
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
+    const copyButtonRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => copyButtonRef.current?.focus(), 100);
+
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const copyToClipboard = () => {
@@ -218,35 +293,48 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
             tempInput.select();
             document.execCommand('copy');
             document.body.removeChild(tempInput);
+            toast.success('Copied to clipboard!');
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-title"
+                aria-describedby="report-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
                     <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
                 </h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Copy this prompt and paste it into your preferred AI chat application.</p>
+                <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                    Copy this prompt and paste it into your preferred AI chat application.
+                </p>
                 
                 <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
                     <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
                 </div>
-                <div className="mt-6 flex justify-between items-center">
+                <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                     <button
+                        ref={copyButtonRef}
                         onClick={copyToClipboard}
                         disabled={!reportData?.text}
-                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50"
+                        className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Clipboard className="w-4 h-4" />
                         <span>Copy to Clipboard</span>
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         Close
                     </button>
@@ -290,23 +378,46 @@ const InstructionsContent = () => (
 );
 
 const WelcomeModal = ({ isOpen, onClose }) => {
+    const closeButtonRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => closeButtonRef.current?.focus(), 100);
+            
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="welcome-title"
+                aria-describedby="welcome-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Welcome to TickTackToto!</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">Here’s a quick guide to get you started:</p>
+                <h2 id="welcome-title" className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
+                    Welcome to TickTackToto!
+                </h2>
+                <p id="welcome-description" className="text-gray-600 dark:text-gray-400 mb-6">
+                    Here's a quick guide to get you started:
+                </p>
                 
                 <InstructionsContent />
 
                 <div className="mt-8 flex justify-end">
                     <button
+                        ref={closeButtonRef}
                         onClick={onClose}
-                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
+                        className="px-6 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
                     >
                         Get Started
                     </button>
@@ -1394,6 +1505,30 @@ ${combinedReport.trim()}
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 2000,
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <ConfirmationModal
         isOpen={isConfirmingDelete}
@@ -1436,7 +1571,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl mx-auto py-8">
+      <div className="max-w-xl lg:max-w-2xl xl:max-w-4xl mx-auto py-8">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -1471,13 +1606,13 @@ ${combinedReport.trim()}
                 </div>
 
                 {showInstructions && (
-                    <section className="absolute z-10 top-full mt-2 w-96 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
+                    <section className="absolute z-10 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
                         <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">How to Use This Tracker</h3>
                         <InstructionsContent />
                         <div className="mt-6 text-center">
                             <button
                                 onClick={() => setShowInstructions(false)}
-                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 min-h-[44px] bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
                             >
                                 <X className="w-4 h-4" />
                                 <span>Hide Instructions</span>
@@ -1530,35 +1665,59 @@ ${combinedReport.trim()}
             <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
           </div>
 
-          <input
-            type="text"
-            placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
-            value={currentTicketId}
-            onChange={(e) => setCurrentTicketId(e.target.value)}
-            disabled={isInputDisabled}
-            className={`w-full p-3 mb-4 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
-          />
+          <div className="relative mb-1">
+            <input
+              type="text"
+              placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
+              value={currentTicketId}
+              onChange={(e) => setCurrentTicketId(e.target.value)}
+              disabled={isInputDisabled}
+              maxLength={200}
+              className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
+            />
+            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+              {currentTicketId.length}/200
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            e.g., PROJ-123, JIRA-456, or any custom format
+          </p>
           {isInputTicketClosed && (
               <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
           {(isTimerRunning || isTimerPaused) && (
             <div className="mb-4">
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">Session Notes (Saved on Pause/Stop)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
+                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {currentNote.length}/5000
+                  </span>
+                </div>
                 <textarea
                     placeholder="E.g., Fixed critical bug in user authentication module."
                     value={currentNote}
                     onChange={(e) => setCurrentNote(e.target.value)}
-                    rows="2"
+                    maxLength={5000}
+                    rows="4"
                     className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
                 />
             </div>
           )}
 
-          <div className={`text-center py-4 rounded-xl mb-6 transition-colors ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}>
-            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">{formatTime(elapsedMs)}</p>
+          <div 
+            className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">
+              <span className="sr-only">Timer: </span>
+              {formatTime(elapsedMs)}
+            </p>
             {(isTimerRunning || isTimerPaused) && (
-                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>{isTimerRunning ? 'Running' : 'Paused'}</p>
+                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
+                  {isTimerRunning ? 'Running' : 'Paused'}
+                </p>
             )}
           </div>
 
@@ -1684,7 +1843,27 @@ ${combinedReport.trim()}
                     Select All Visible
                 </label>
             </div>
-          {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
+          {filteredAndGroupedLogs.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <List className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
+              <p className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+                {logs.length === 0 ? "No time logs yet" : "No logs match your filters"}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 max-w-sm">
+                {logs.length === 0 
+                  ? "Start tracking time by entering a ticket ID and clicking START above" 
+                  : "Try adjusting your filters or clearing them to see more results"}
+              </p>
+              {(statusFilter !== 'All' || dateFilter) && (
+                <button
+                  onClick={() => { setStatusFilter('All'); setDateFilter(''); }}
+                  className="mt-4 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors text-sm font-medium"
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          )}
           <ul className="space-y-6 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
