@@ -544,6 +544,7 @@ const App = () => {
   const exportMenuRef = useRef(null);
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
+  const handleExportRef = useRef(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -909,7 +910,9 @@ const App = () => {
         setExportFocusIndex((prev) => (prev - 1 + exportOptions.length) % exportOptions.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        handleExport(exportOptions[exportFocusIndex]);
+        if (handleExportRef.current) {
+          handleExportRef.current(exportOptions[exportFocusIndex]);
+        }
         setExportOption('');
         setExportFocusIndex(0);
       } else if (e.key === 'Escape') {
@@ -924,7 +927,7 @@ const App = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFocusIndex, handleExport]);
+  }, [exportOption, exportFocusIndex]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1548,6 +1551,11 @@ ${combinedReport.trim()}
       setExportOption('');
     }
   }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
+
+  // Update handleExportRef for keyboard navigation
+  useEffect(() => {
+    handleExportRef.current = handleExport;
+  }, [handleExport]);
 
   const handleToggleSelectTicket = (ticketId) => {
     setSelectedTickets(prevSelected => {
