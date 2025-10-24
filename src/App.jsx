@@ -508,10 +508,14 @@ const App = () => {
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRangeStart, setDateRangeStart] = useState('');
+  const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
   const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
+  const [recentTicketIds, setRecentTicketIds] = useState([]);
 
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -553,6 +557,45 @@ const App = () => {
         localStorage.setItem('hasVisitedTimeTracker', 'true');
     }
   }, []);
+
+  // Load user profile from localStorage
+  useEffect(() => {
+    const savedTitle = localStorage.getItem('userTitle');
+    if (savedTitle) {
+      setUserTitle(savedTitle);
+    }
+  }, []);
+
+  // Save user profile to localStorage with debounce
+  useEffect(() => {
+    if (!userTitle) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem('userTitle', userTitle);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [userTitle]);
+
+  // Load recent ticket IDs from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('recentTicketIds');
+    if (saved) {
+      try {
+        setRecentTicketIds(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading recent tickets:', e);
+      }
+    }
+  }, []);
+
+  // Track recent ticket IDs when new sessions are created
+  useEffect(() => {
+    if (logs.length > 0) {
+      const uniqueTickets = [...new Set(logs.map(log => log.ticketId))];
+      const recent = uniqueTickets.slice(0, 10); // Keep last 10 unique
+      setRecentTicketIds(recent);
+      localStorage.setItem('recentTicketIds', JSON.stringify(recent));
+    }
+  }, [logs]);
   
   // --- Check for Share ID in URL on initial load ---
   useEffect(() => {
@@ -790,15 +833,35 @@ const App = () => {
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
-    const dateFilteredLogs = dateFilter
-      ? logs.filter(log => {
-          if (!log.endTime) return false;
-          const logDate = new Date(log.endTime).toISOString().split('T')[0];
-          return logDate === dateFilter;
-        })
-      : logs;
+    // Apply date filtering (single date or date range)
+    let dateFilteredLogs = logs;
+    
+    if (dateRangeStart || dateRangeEnd) {
+      // Date range filtering
+      dateFilteredLogs = logs.filter(log => {
+        if (!log.endTime) return false;
+        const logDate = new Date(log.endTime).toISOString().split('T')[0];
+        if (dateRangeStart && logDate < dateRangeStart) return false;
+        if (dateRangeEnd && logDate > dateRangeEnd) return false;
+        return true;
+      });
+    } else if (dateFilter) {
+      // Single date filtering (legacy support)
+      dateFilteredLogs = logs.filter(log => {
+        if (!log.endTime) return false;
+        const logDate = new Date(log.endTime).toISOString().split('T')[0];
+        return logDate === dateFilter;
+      });
+    }
 
-    const groups = dateFilteredLogs.reduce((acc, log) => {
+    // Apply search filtering
+    const searchFilteredLogs = searchQuery
+      ? dateFilteredLogs.filter(log => 
+          log.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : dateFilteredLogs;
+
+    const groups = searchFilteredLogs.reduce((acc, log) => {
       const id = log.ticketId;
       if (!acc[id]) {
         acc[id] = {
@@ -845,7 +908,7 @@ const App = () => {
 
 
     return statusFilteredGroups;
-  }, [logs, ticketStatuses, statusFilter, dateFilter]);
+  }, [logs, ticketStatuses, statusFilter, dateFilter, dateRangeStart, dateRangeEnd, searchQuery]);
 
   const totalFilteredTimeMs = useMemo(() => {
     return filteredAndGroupedLogs.reduce((total, group) => total + group.totalDurationMs, 0);
@@ -1668,6 +1731,7 @@ ${combinedReport.trim()}
           <div className="relative mb-1">
             <input
               type="text"
+              list="recent-tickets"
               placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
               value={currentTicketId}
               onChange={(e) => setCurrentTicketId(e.target.value)}
@@ -1675,6 +1739,11 @@ ${combinedReport.trim()}
               maxLength={200}
               className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
             />
+            <datalist id="recent-tickets">
+              {recentTicketIds.map(id => (
+                <option key={id} value={id} />
+              ))}
+            </datalist>
             <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
               {currentTicketId.length}/200
             </span>
@@ -1748,10 +1817,80 @@ ${combinedReport.trim()}
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-end">
+            
+            {/* Search Input */}
+            <div className="mb-4">
+                <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Search Tickets
+                </label>
+                <div className="relative">
+                    <input
+                        type="search"
+                        id="search-filter"
+                        placeholder="Search by ticket ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full p-2 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Quick Date Filters */}
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Quick Filters
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => {
+                            const today = new Date().toISOString().split('T')[0];
+                            setDateRangeStart(today);
+                            setDateRangeEnd(today);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Today
+                    </button>
+                    <button
+                        onClick={() => {
+                            const today = new Date();
+                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            setDateRangeStart(weekAgo.toISOString().split('T')[0]);
+                            setDateRangeEnd(today.toISOString().split('T')[0]);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Last 7 Days
+                    </button>
+                    <button
+                        onClick={() => {
+                            const today = new Date();
+                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            setDateRangeStart(monthAgo.toISOString().split('T')[0]);
+                            setDateRangeEnd(today.toISOString().split('T')[0]);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Last 30 Days
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
                 <div>
                     <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="All">All Unsubmitted</option>
                         <option value="Open">Open</option>
                         <option value="Closed">Closed</option>
@@ -1759,16 +1898,52 @@ ${combinedReport.trim()}
                     </select>
                 </div>
                 <div>
-                    <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-                    <input type="date" id="date-filter" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                    <input 
+                        type="date" 
+                        id="date-start" 
+                        value={dateRangeStart} 
+                        onChange={(e) => {
+                            setDateRangeStart(e.target.value);
+                            setDateFilter('');
+                        }} 
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
                 </div>
-                <button onClick={() => { setStatusFilter('All'); setDateFilter(''); }} className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]">
-                     Clear Filters
+                <div>
+                    <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                    <input 
+                        type="date" 
+                        id="date-end" 
+                        value={dateRangeEnd} 
+                        onChange={(e) => {
+                            setDateRangeEnd(e.target.value);
+                            setDateFilter('');
+                        }} 
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                </div>
+                <button 
+                    onClick={() => { 
+                        setStatusFilter('All'); 
+                        setDateFilter(''); 
+                        setDateRangeStart(''); 
+                        setDateRangeEnd(''); 
+                        setSearchQuery(''); 
+                    }} 
+                    className="w-full sm:w-auto px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                >
+                     Clear All Filters
                  </button>
             </div>
             <div className="bg-indigo-50 dark:bg-gray-700/50 p-4 rounded-lg text-center shadow-inner">
                 <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">Total Time for Selected Filters</p>
                 <p className="text-2xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mt-1">{formatTime(totalFilteredTimeMs)}</p>
+                {filteredAndGroupedLogs.length > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {filteredAndGroupedLogs.length} ticket(s) shown
+                    </p>
+                )}
             </div>
         </section>
 
