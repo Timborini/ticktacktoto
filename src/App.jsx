@@ -1435,6 +1435,71 @@ const App = () => {
     }
 }, [selectedTickets, selectedSessions, exportedSessionIds, logs, getCollectionRef, db]);
 
+  // Helper function to perform the actual export
+  const performExport = useCallback((logsToExport, reportName, format) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      if (format === 'json') {
+        // JSON Export
+        const filename = `${reportName}-${today}.json`;
+        const jsonData = logsToExport.map(log => ({
+          ticketId: log.ticketId,
+          timeWorked: formatTime(log.accumulatedMs),
+          timeWorkedMs: log.accumulatedMs,
+          note: log.note || '',
+          startDateTime: log.createdAt ? new Date(log.createdAt).toISOString() : null,
+          finishedDateTime: log.endTime ? new Date(log.endTime).toISOString() : null,
+          sessionId: log.id,
+          status: log.status,
+          submissionDate: log.submissionDate ? new Date(log.submissionDate).toISOString() : null
+        }));
+
+        const jsonContent = JSON.stringify(jsonData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as JSON`);
+      } else {
+        // CSV Export
+        const filename = `${reportName}-${today}.csv`;
+        const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
+        const csvRows = logsToExport.map(log => {
+          // Use secure CSV escaping to prevent formula injection
+          const formattedDuration = formatTime(log.accumulatedMs);
+          const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
+          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
+          const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
+          return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as CSV`);
+      }
+    } catch (error) {
+      console.error('Export Failed:', error);
+      setFirebaseError(`Export failed: ${error.message}`);
+      toast.error('Export failed');
+    }
+  }, []);
+
   // Handler for export confirmation with three options
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
     if (!pendingExport || !getCollectionRef) {
@@ -1570,72 +1635,6 @@ ${combinedReport.trim()}
     setGeneratedReport({ text: finalPrompt.trim() });
     setIsReportModalOpen(true);
   };
-
-
-  // Helper function to perform the actual export
-  const performExport = useCallback((logsToExport, reportName, format) => {
-    const today = new Date().toISOString().split('T')[0];
-
-    try {
-      if (format === 'json') {
-        // JSON Export
-        const filename = `${reportName}-${today}.json`;
-        const jsonData = logsToExport.map(log => ({
-          ticketId: log.ticketId,
-          timeWorked: formatTime(log.accumulatedMs),
-          timeWorkedMs: log.accumulatedMs,
-          note: log.note || '',
-          startDateTime: log.createdAt ? new Date(log.createdAt).toISOString() : null,
-          finishedDateTime: log.endTime ? new Date(log.endTime).toISOString() : null,
-          sessionId: log.id,
-          status: log.status,
-          submissionDate: log.submissionDate ? new Date(log.submissionDate).toISOString() : null
-        }));
-
-        const jsonContent = JSON.stringify(jsonData, null, 2);
-        const blob = new Blob([jsonContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as JSON`);
-      } else {
-        // CSV Export
-        const filename = `${reportName}-${today}.csv`;
-        const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
-        const csvRows = logsToExport.map(log => {
-          // Use secure CSV escaping to prevent formula injection
-          const formattedDuration = formatTime(log.accumulatedMs);
-          const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
-          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-          const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
-          return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
-        });
-
-        const csvContent = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as CSV`);
-      }
-    } catch (error) {
-      console.error('Export Failed:', error);
-      setFirebaseError(`Export failed: ${error.message}`);
-      toast.error('Export failed');
-    }
-  }, []);
 
   const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
