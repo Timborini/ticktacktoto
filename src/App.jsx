@@ -578,6 +578,7 @@ const App = () => {
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
   const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
+  const [pendingExport, setPendingExport] = useState(null); // Store export details for pre-confirmation
   const [recentTicketIds, setRecentTicketIds] = useState([]);
 
   // --- Modal State ---
@@ -1434,6 +1435,46 @@ const App = () => {
     }
 }, [selectedTickets, selectedSessions, exportedSessionIds, logs, getCollectionRef, db]);
 
+  // Handler for export confirmation with three options
+  const handleConfirmExport = useCallback(async (markAsSubmitted) => {
+    if (!pendingExport || !getCollectionRef) {
+      setIsConfirmingSubmit(false);
+      setPendingExport(null);
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      if (markAsSubmitted) {
+        // Mark sessions as submitted
+        const batch = writeBatch(db);
+        exportedSessionIds.forEach(sessionId => {
+          const sessionRef = doc(getCollectionRef, sessionId);
+          batch.update(sessionRef, {
+            status: 'submitted',
+            submissionDate: Date.now()
+          });
+        });
+        await batch.commit();
+        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
+      }
+
+      // Now perform the export
+      performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
+      
+    } catch (error) {
+      console.error('Error:', error);
+      setFirebaseError('Failed to update submission status.');
+      toast.error('Failed to update status');
+    } finally {
+      setIsConfirmingSubmit(false);
+      setExportedSessionIds(new Set());
+      setPendingExport(null);
+      setIsLoading(false);
+    }
+  }, [pendingExport, exportedSessionIds, getCollectionRef, db, performExport]);
+
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
     selectedTickets.forEach(ticketId => {
@@ -1531,58 +1572,8 @@ ${combinedReport.trim()}
   };
 
 
-  const handleExport = useCallback(async (exportType, format = 'csv') => {
-    if (!exportType) return;
-
-    let logsToExport = [];
-    let reportName = 'time-report';
-
-    // Data selection logic
-    switch (exportType) {
-      case 'selected':
-        if (selectedTickets.size === 0 && selectedSessions.size === 0) {
-          setExportOption('');
-          return;
-        }
-        
-        const finalSelectedSessions = new Set();
-        selectedSessions.forEach(sessionId => {
-          const log = logs.find(l => l.id === sessionId);
-          if (log) finalSelectedSessions.add(log);
-        });
-        selectedTickets.forEach(ticketId => {
-          logs.forEach(log => {
-            if (log.ticketId === ticketId && log.endTime) {
-              finalSelectedSessions.add(log);
-            }
-          });
-        });
-        logsToExport = Array.from(finalSelectedSessions);
-        reportName = 'selected-report';
-        break;
-
-      case 'filtered':
-        logsToExport = filteredAndGroupedLogs.flatMap(group => group.sessions);
-        reportName = filteredAndGroupedLogs.length === 1
-          ? filteredAndGroupedLogs[0].ticketId.replace(/[^a-z0-9]/gi, '_').toLowerCase()
-          : 'filtered-report';
-        break;
-
-      case 'all':
-        logsToExport = logs.filter(log => log.endTime);
-        reportName = 'full-report';
-        break;
-      
-      default:
-        setExportOption('');
-        return;
-    }
-
-    if (logsToExport.length === 0) {
-      setExportOption('');
-      return;
-    }
-
+  // Helper function to perform the actual export
+  const performExport = useCallback((logsToExport, reportName, format) => {
     const today = new Date().toISOString().split('T')[0];
 
     try {
@@ -1639,21 +1630,86 @@ ${combinedReport.trim()}
 
         toast.success(`Exported ${logsToExport.length} entries as CSV`);
       }
-
-      // Track exported session IDs and prompt for submission if not already submitted
-      const exportedIds = new Set(logsToExport.filter(log => log.status !== 'submitted').map(log => log.id));
-      if (exportedIds.size > 0 && statusFilter !== 'Submitted') {
-        setExportedSessionIds(exportedIds);
-        setIsConfirmingSubmit(true);
-      }
     } catch (error) {
       console.error('Export Failed:', error);
       setFirebaseError(`Export failed: ${error.message}`);
       toast.error('Export failed');
-    } finally {
-      setExportOption('');
     }
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
+  }, []);
+
+  const handleExport = useCallback(async (exportType, format = 'csv') => {
+    if (!exportType) return;
+
+    let logsToExport = [];
+    let reportName = 'time-report';
+
+    // Data selection logic
+    switch (exportType) {
+      case 'selected':
+        if (selectedTickets.size === 0 && selectedSessions.size === 0) {
+          setExportOption('');
+          return;
+        }
+        
+        const finalSelectedSessions = new Set();
+        selectedSessions.forEach(sessionId => {
+          const log = logs.find(l => l.id === sessionId);
+          if (log) finalSelectedSessions.add(log);
+        });
+        selectedTickets.forEach(ticketId => {
+          logs.forEach(log => {
+            if (log.ticketId === ticketId && log.endTime) {
+              finalSelectedSessions.add(log);
+            }
+          });
+        });
+        logsToExport = Array.from(finalSelectedSessions);
+        reportName = 'selected-report';
+        break;
+
+      case 'filtered':
+        logsToExport = filteredAndGroupedLogs.flatMap(group => group.sessions);
+        reportName = filteredAndGroupedLogs.length === 1
+          ? filteredAndGroupedLogs[0].ticketId.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          : 'filtered-report';
+        break;
+
+      case 'all':
+        logsToExport = logs.filter(log => log.endTime);
+        reportName = 'full-report';
+        break;
+      
+      default:
+        setExportOption('');
+        return;
+    }
+
+    if (logsToExport.length === 0) {
+      setExportOption('');
+      return;
+    }
+
+    // Check for unsubmitted items BEFORE exporting
+    const unsubmittedLogs = logsToExport.filter(log => log.status !== 'submitted');
+    if (unsubmittedLogs.length > 0 && statusFilter !== 'Submitted') {
+      // Store export details and show confirmation modal first
+      setPendingExport({
+        type: exportType,
+        format,
+        logs: logsToExport,
+        name: reportName,
+        unsubmittedCount: unsubmittedLogs.length
+      });
+      setExportedSessionIds(new Set(unsubmittedLogs.map(log => log.id)));
+      setIsConfirmingSubmit(true);
+      setExportOption('');
+      return; // Exit - actual export happens after user confirms
+    }
+
+    // All items already submitted or no check needed - export immediately
+    performExport(logsToExport, reportName, format);
+    setExportOption('');
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter, performExport]);
 
   // Update handleExportRef for keyboard navigation
   useEffect(() => {
@@ -1854,20 +1910,76 @@ ${combinedReport.trim()}
         onCancel={handleCancelDelete}
         confirmText="Delete"
       />
-      <ConfirmationModal
-        isOpen={isConfirmingSubmit}
-        title="Mark as Submitted?"
-        message={exportedSessionIds.size > 0 
-          ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
-          : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
-        }
-        onConfirm={handleMarkAsSubmitted}
-        onCancel={() => {
-          setIsConfirmingSubmit(false);
-          setExportedSessionIds(new Set());
-        }}
-        confirmText="Mark as Submitted"
-      />
+      {/* Export Confirmation Modal with three options */}
+      {isConfirmingSubmit && pendingExport ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-confirm-title"
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="export-confirm-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+              Export Time Entries
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              You're about to export <strong>{pendingExport.logs.length} session(s)</strong>, 
+              including <strong>{pendingExport.unsubmittedCount} unsubmitted</strong>.
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Would you like to mark them as submitted?
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => handleConfirmExport(true)}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Export & Mark Submitted
+              </button>
+              
+              <button
+                onClick={() => handleConfirmExport(false)}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Only
+              </button>
+              
+              <button
+                onClick={() => {
+                  setIsConfirmingSubmit(false);
+                  setPendingExport(null);
+                  setExportedSessionIds(new Set());
+                }}
+                disabled={isLoading}
+                className="w-full px-4 py-2 min-h-[44px] text-gray-600 dark:text-gray-400 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ConfirmationModal
+          isOpen={isConfirmingSubmit}
+          title="Mark as Submitted?"
+          message={exportedSessionIds.size > 0 
+            ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
+            : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
+          }
+          onConfirm={handleMarkAsSubmitted}
+          onCancel={() => {
+            setIsConfirmingSubmit(false);
+            setExportedSessionIds(new Set());
+          }}
+          confirmText="Mark as Submitted"
+        />
+      )}
       <ReportModal
           isOpen={isReportModalOpen}
           onClose={() => {
