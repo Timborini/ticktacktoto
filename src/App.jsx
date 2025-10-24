@@ -963,7 +963,14 @@ const App = () => {
     if (exportOption !== 'menu') return;
 
     const handleKeyDown = (e) => {
-      const exportOptions = ['selected', 'filtered', 'all'];
+      const exportOptions = [
+        { type: 'selected', format: 'csv' },
+        { type: 'selected', format: 'json' },
+        { type: 'filtered', format: 'csv' },
+        { type: 'filtered', format: 'json' },
+        { type: 'all', format: 'csv' },
+        { type: 'all', format: 'json' }
+      ];
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -974,7 +981,8 @@ const App = () => {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (handleExportRef.current) {
-          handleExportRef.current(exportOptions[exportFocusIndex]);
+          const selected = exportOptions[exportFocusIndex];
+          handleExportRef.current(selected.type, selected.format);
         }
         setExportOption('');
         setExportFocusIndex(0);
@@ -1523,7 +1531,7 @@ ${combinedReport.trim()}
   };
 
 
-  const handleExport = useCallback(async (exportType) => {
+  const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
 
     let logsToExport = [];
@@ -1578,28 +1586,59 @@ ${combinedReport.trim()}
     const today = new Date().toISOString().split('T')[0];
 
     try {
-      // CSV Export
-      const filename = `${reportName}-${today}.csv`;
-      const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
-      const csvRows = logsToExport.map(log => {
-        // Use secure CSV escaping to prevent formula injection
-        const formattedDuration = formatTime(log.accumulatedMs);
-        const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
-        const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-        const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
-        return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
-      });
+      if (format === 'json') {
+        // JSON Export
+        const filename = `${reportName}-${today}.json`;
+        const jsonData = logsToExport.map(log => ({
+          ticketId: log.ticketId,
+          timeWorked: formatTime(log.accumulatedMs),
+          timeWorkedMs: log.accumulatedMs,
+          note: log.note || '',
+          startDateTime: log.createdAt ? new Date(log.createdAt).toISOString() : null,
+          finishedDateTime: log.endTime ? new Date(log.endTime).toISOString() : null,
+          sessionId: log.id,
+          status: log.status,
+          submissionDate: log.submissionDate ? new Date(log.submissionDate).toISOString() : null
+        }));
 
-      const csvContent = [headers.join(','), ...csvRows].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+        const jsonContent = JSON.stringify(jsonData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as JSON`);
+      } else {
+        // CSV Export
+        const filename = `${reportName}-${today}.csv`;
+        const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
+        const csvRows = logsToExport.map(log => {
+          // Use secure CSV escaping to prevent formula injection
+          const formattedDuration = formatTime(log.accumulatedMs);
+          const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
+          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
+          const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
+          return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as CSV`);
+      }
 
       // Track exported session IDs and prompt for submission if not already submitted
       const exportedIds = new Set(logsToExport.filter(log => log.status !== 'submitted').map(log => log.id));
@@ -1610,6 +1649,7 @@ ${combinedReport.trim()}
     } catch (error) {
       console.error('Export Failed:', error);
       setFirebaseError(`Export failed: ${error.message}`);
+      toast.error('Export failed');
     } finally {
       setExportOption('');
     }
@@ -1847,7 +1887,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl lg:max-w-2xl xl:max-w-4xl mx-auto py-8">
+      <div className="max-w-xl lg:max-w-3xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -2302,34 +2342,78 @@ ${combinedReport.trim()}
                   {exportOption === 'menu' && (
                     <div 
                       ref={exportMenuRef}
-                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]"
+                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
                       role="menu"
                       aria-label="Export options"
                     >
-                      <button
-                        onClick={() => handleExport('selected')}
-                        disabled={isActionDisabled}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export Selected
-                      </button>
-                      <button
-                        onClick={() => handleExport('filtered')}
-                        disabled={filteredAndGroupedLogs.length === 0}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export Filtered
-                      </button>
-                      <button
-                        onClick={() => handleExport('all')}
-                        disabled={logs.length === 0}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export All
-                      </button>
+                      {/* Section 1: Selected */}
+                      <div className="border-b border-gray-200 dark:border-gray-700">
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          Selected
+                        </div>
+                        <button
+                          onClick={() => handleExport('selected', 'csv')}
+                          disabled={isActionDisabled}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📄 CSV
+                        </button>
+                        <button
+                          onClick={() => handleExport('selected', 'json')}
+                          disabled={isActionDisabled}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📋 JSON
+                        </button>
+                      </div>
+
+                      {/* Section 2: Filtered */}
+                      <div className="border-b border-gray-200 dark:border-gray-700">
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          Filtered
+                        </div>
+                        <button
+                          onClick={() => handleExport('filtered', 'csv')}
+                          disabled={filteredAndGroupedLogs.length === 0}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📄 CSV
+                        </button>
+                        <button
+                          onClick={() => handleExport('filtered', 'json')}
+                          disabled={filteredAndGroupedLogs.length === 0}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 3 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📋 JSON
+                        </button>
+                      </div>
+
+                      {/* Section 3: All Data */}
+                      <div>
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          All Data
+                        </div>
+                        <button
+                          onClick={() => handleExport('all', 'csv')}
+                          disabled={logs.length === 0}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 4 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📄 CSV
+                        </button>
+                        <button
+                          onClick={() => handleExport('all', 'json')}
+                          disabled={logs.length === 0}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 5 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          📋 JSON
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
