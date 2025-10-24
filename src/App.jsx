@@ -344,92 +344,101 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     );
 };
 
-const InstructionsContent = () => (
-    <div className="space-y-5 text-sm text-gray-700 dark:text-gray-300">
-        <div>
-            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
-                <Clock className="w-4 h-4 mr-2" />
-                Getting Started
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Start Timer:</strong> Enter a ticket ID (e.g., PROJ-123) and optional notes, then click 'START' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd>.</li>
-                <li><strong>Autocomplete:</strong> Recent ticket IDs appear as suggestions when you start typing.</li>
-                <li><strong>Timer Notifications:</strong> Get alerts at 30min, 1hr, 2hr, and 4hr milestones.</li>
-                <li><strong>Pause/Resume:</strong> Click 'PAUSE' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd> to pause; press again to resume.</li>
-                <li><strong>Stop Timer:</strong> Click 'STOP' or press <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Alt+Enter</kbd> to finalize your session.</li>
-            </ul>
-        </div>
+const InstructionsContent = () => {
+    const [expandedSection, setExpandedSection] = useState('getting-started');
 
-        <div>
-            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
-                <List className="w-4 h-4 mr-2" />
-                Managing Your Time Logs
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Edit Ticket IDs:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1 text-blue-500"/> icon to rename a ticket across all its sessions.</li>
-                <li><strong>Reallocate Sessions:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1 text-purple-500"/> icon to move a session to a different ticket.</li>
-                <li><strong>Delete Sessions:</strong> Click the <Trash2 className="w-4 h-4 inline-block -mt-1 text-red-500"/> icon to remove unwanted sessions.</li>
-                <li><strong>Close Tickets:</strong> Mark tickets as 'Closed' to archive them (they'll be filtered out by default).</li>
-            </ul>
-        </div>
+    const toggleSection = (section) => {
+        setExpandedSection(expandedSection === section ? null : section);
+    };
 
-        <div>
-            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Statistics & Insights
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Dashboard:</strong> View total time, submitted vs unsubmitted counts, and average session time at a glance.</li>
-                <li><strong>Real-Time Updates:</strong> All statistics update automatically as you track time.</li>
-                <li><strong>Filter Statistics:</strong> Use date ranges and search to analyze specific periods or tickets.</li>
-            </ul>
-        </div>
+    const Section = ({ id, icon: Icon, title, children }) => {
+        const isExpanded = expandedSection === id;
+        
+        return (
+            <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                <button
+                    onClick={() => toggleSection(id)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                    aria-expanded={isExpanded}
+                >
+                    <h4 className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
+                        <Icon className="w-4 h-4 mr-2" />
+                        {title}
+                    </h4>
+                    <span className="text-xl text-gray-400 dark:text-gray-500 font-light">
+                        {isExpanded ? '−' : '+'}
+                    </span>
+                </button>
+                
+                {isExpanded && (
+                    <div className="px-4 pb-4 text-sm text-gray-700 dark:text-gray-300">
+                        {children}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
-        <div>
-            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
-                <Check className="w-4 h-4 mr-2" />
-                Advanced Features
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Search:</strong> Use the search box to quickly find tickets by ID.</li>
-                <li><strong>Date Filters:</strong> Filter by date range or use quick buttons (Today, Last 7 Days, Last 30 Days).</li>
-                <li><strong>Bulk Operations:</strong> Select multiple sessions to delete or change status all at once.</li>
-                <li><strong>Export Options:</strong> Download CSV files with selected, filtered, or all time entries.</li>
-                <li><strong>AI Draft:</strong> Select tickets/sessions and click "AI Draft" to generate a formatted summary for reports.</li>
-                <li><strong>Share Filters:</strong> Your filter settings are saved in the URL - share links to specific views!</li>
-            </ul>
-        </div>
+    return (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <Section id="getting-started" icon={Clock} title="Getting Started">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Start Timer:</strong> Enter ticket ID + 'START' or press <kbd className="kbd-key">Enter</kbd></li>
+                    <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
+                    <li><strong>Notifications:</strong> Alerts at 30min, 1hr, 2hr, 4hr milestones</li>
+                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Enter</kbd> or click 'PAUSE'</li>
+                </ul>
+            </Section>
 
-        <div>
-            <h4 className="font-bold text-indigo-600 dark:text-indigo-400 mb-2 flex items-center">
-                <Keyboard className="w-4 h-4 mr-2" />
-                Keyboard Shortcuts
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Enter</kbd> - Start/Pause/Resume timer (when not typing)</li>
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Ctrl+Space</kbd> or <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Cmd+Space</kbd> - Start/Pause/Resume (works everywhere)</li>
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Alt+Enter</kbd> or <kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Cmd+Enter</kbd> - Stop timer</li>
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">↑/↓</kbd> - Navigate export dropdown options</li>
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Esc</kbd> - Close modals and dropdowns</li>
-                <li><kbd className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-xs">Tab</kbd> - Navigate between elements</li>
-            </ul>
-        </div>
+            <Section id="managing" icon={List} title="Managing Logs">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Edit:</strong> Click <Pencil className="w-3 h-3 inline-block -mt-1 text-blue-500"/> to rename tickets across all sessions</li>
+                    <li><strong>Reallocate:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-purple-500"/> to move sessions to different tickets</li>
+                    <li><strong>Delete:</strong> Click <Trash2 className="w-3 h-3 inline-block -mt-1 text-red-500"/> to remove sessions</li>
+                    <li><strong>Archive:</strong> Mark tickets as 'Closed' to filter them out</li>
+                </ul>
+            </Section>
 
-        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
-            <h4 className="font-bold text-indigo-700 dark:text-indigo-300 mb-1 flex items-center">
-                <Info className="w-4 h-4 mr-2" />
-                Pro Tips
-            </h4>
-            <ul className="list-disc list-inside space-y-1 ml-2 text-xs">
-                <li>Your profile and recent tickets are saved locally - no need to re-enter them!</li>
-                <li>Character counters show input limits (200 for ticket ID, 5000 for notes).</li>
-                <li>Use bulk operations to manage multiple sessions efficiently.</li>
-                <li>The statistics dashboard helps you track productivity over time.</li>
-                <li>All your data syncs to Firebase - accessible from any device with the same account.</li>
-            </ul>
+            <Section id="stats" icon={TrendingUp} title="Statistics & Insights">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li>Dashboard shows total time, status breakdown, and averages</li>
+                    <li>Stats update in real-time as you track</li>
+                    <li>Filter by date range or search to analyze specific periods</li>
+                </ul>
+            </Section>
+
+            <Section id="advanced" icon={Check} title="Advanced Features">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Search:</strong> Find tickets instantly by ID</li>
+                    <li><strong>Date Filters:</strong> Today, Last 7/30 days, or custom range</li>
+                    <li><strong>Bulk Operations:</strong> Select multiple → delete or change status</li>
+                    <li><strong>Export:</strong> CSV of selected/filtered/all entries</li>
+                    <li><strong>Share:</strong> Filters saved in URL - share specific views!</li>
+                </ul>
+            </Section>
+
+            <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div><kbd className="kbd-key">Enter</kbd> Start/Pause/Resume</div>
+                    <div><kbd className="kbd-key">Ctrl+Space</kbd> Timer (anywhere)</div>
+                    <div><kbd className="kbd-key">Alt+Enter</kbd> Stop timer</div>
+                    <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
+                    <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
+                    <div><kbd className="kbd-key">Tab</kbd> Navigate UI</div>
+                </div>
+            </Section>
+
+            <Section id="tips" icon={Info} title="Pro Tips">
+                <ul className="list-disc list-inside space-y-1.5 text-xs">
+                    <li>Profile & recent tickets saved locally</li>
+                    <li>Limits: 200 chars (ticket), 5000 chars (notes)</li>
+                    <li>Use bulk ops for efficiency</li>
+                    <li>Data syncs via Firebase across devices</li>
+                </ul>
+            </Section>
         </div>
-    </div>
-);
+    );
+};
 
 const WelcomeModal = ({ isOpen, onClose }) => {
     const closeButtonRef = useRef(null);
