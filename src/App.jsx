@@ -383,10 +383,10 @@ const InstructionsContent = () => {
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
             <Section id="getting-started" icon={Clock} title="Getting Started">
                 <ul className="list-disc list-inside space-y-1.5">
-                    <li><strong>Start Timer:</strong> Enter ticket ID + 'START' or press <kbd className="kbd-key">Enter</kbd></li>
+                    <li><strong>Start Timer:</strong> Enter ticket ID + 'START' or press <kbd className="kbd-key">Space</kbd></li>
                     <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
                     <li><strong>Notifications:</strong> Alerts at 30min, 1hr, 2hr, 4hr milestones</li>
-                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Enter</kbd> or click 'PAUSE'</li>
+                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Space</kbd> or click 'PAUSE'</li>
                 </ul>
             </Section>
 
@@ -419,11 +419,11 @@ const InstructionsContent = () => {
 
             <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div><kbd className="kbd-key">Enter</kbd> Start/Pause/Resume</div>
-                    <div><kbd className="kbd-key">Ctrl+Space</kbd> Timer (anywhere)</div>
-                    <div><kbd className="kbd-key">Alt+Enter</kbd> Stop timer</div>
+                    <div><kbd className="kbd-key">Space</kbd> Start/Pause/Resume</div>
+                    <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize</div>
                     <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
                     <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
+                    <div><kbd className="kbd-key">Enter</kbd> Submit forms</div>
                     <div><kbd className="kbd-key">Tab</kbd> Navigate UI</div>
                 </div>
             </Section>
@@ -1802,9 +1802,12 @@ ${combinedReport.trim()}
   useEffect(() => {
     const handleKeyDown = (event) => {
       const activeTag = document.activeElement.tagName;
+      const isTyping = activeTag === 'TEXTAREA' || activeTag === 'INPUT';
+      const hasModal = document.querySelector('.fixed.inset-0');
+      const isEditing = editingTicketIdRef.current;
 
-      // Ctrl/Cmd + Space: Global timer toggle (works even in text fields)
-      if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
+      // Space: Start/Pause/Resume (when not typing)
+      if (event.key === ' ' && !isTyping && !hasModal && !isEditing) {
         event.preventDefault();
         if (actionHandlerRef.current && !isButtonDisabledRef.current) {
           actionHandlerRef.current();
@@ -1812,23 +1815,19 @@ ${combinedReport.trim()}
         return;
       }
 
-      if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
+      // Shift+Space: Stop & Finalize (works anywhere except in text fields)
+      if (event.key === ' ' && event.shiftKey && !isTyping) {
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
           stopTimerRef.current(false);
         }
-        return; 
+        return;
       }
-      
-      if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0') || editingTicketIdRef.current) {
-          return;
-        }
 
-        event.preventDefault();
-        if (actionHandlerRef.current && !isButtonDisabledRef.current) {
-          actionHandlerRef.current();
-        }
+      // Enter: Only works in inputs/modals (removed global timer control)
+      if (event.key === 'Enter') {
+        // Let Enter work normally in inputs, textareas, buttons, and modals
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2173,9 +2172,8 @@ ${combinedReport.trim()}
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
                 <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
-                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl/Cmd + Space</span>: Start / Pause / Resume timer (works everywhere).</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Alt/Cmd + Enter</span>: Stop and finalize the current entry.</p>
+                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Space</span> (when not typing): Start / Pause / Resume timer.</p>
+                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Shift + Space</span>: Stop and finalize the current entry.</p>
            </div>
         </section>
 
