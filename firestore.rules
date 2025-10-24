@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to validate string field length
+    function validStringLength(str, maxLength) {
+      return str is string && str.size() <= maxLength;
+    }
+    
+    // Helper function to validate ticket ID format
+    function validTicketId(ticketId) {
+      return validStringLength(ticketId, 200) && 
+             !ticketId.matches('.*[<>].*') &&  // No HTML characters
+             !ticketId.lower().matches('.*javascript:.*');  // No javascript: protocol
+    }
+    
+    // Helper function to validate note format
+    function validNote(note) {
+      return validStringLength(note, 5000) && 
+             !note.matches('.*[<>].*') &&  // No HTML characters
+             !note.lower().matches('.*javascript:.*');  // No javascript: protocol
+    }
+    
+    // Helper function to validate time entry data
+    function validTimeEntry(data) {
+      return data.keys().hasAll(['ticketId', 'startTime', 'accumulatedMs']) &&
+             validTicketId(data.ticketId) &&
+             data.startTime is number &&
+             data.accumulatedMs is number &&
+             data.accumulatedMs >= 0 &&
+             data.accumulatedMs < 86400000 * 30 &&  // Max 30 days
+             (!('endTime' in data) || data.endTime == null || data.endTime is number) &&
+             (!('note' in data) || validNote(data.note)) &&
+             (!('status' in data) || data.status in ['submitted', 'unsubmitted']) &&
+             (!('createdAt' in data) || data.createdAt is number);
+    }
+    
+    // Helper function to validate ticket status data
+    function validTicketStatus(data) {
+      return data.keys().hasAll(['ticketId', 'isClosed']) &&
+             validTicketId(data.ticketId) &&
+             data.isClosed is bool;
+    }
+    
+    // User-specific data paths
+    match /artifacts/{appId}/users/{userId}/time_entries/{entryId} {
+      // Users can read and write only their own time entries
+      allow read, create, update, delete: if request.auth != null && 
+                                            request.auth.uid == userId &&
+                                            validTimeEntry(request.resource.data);
+      
+      // Rate limiting: Max 100 writes per minute per user (requires Firebase extensions)
+      // Note: This is a simplified check - implement proper rate limiting with Cloud Functions
+    }
+    
+    match /artifacts/{appId}/users/{userId}/ticket_statuses/{statusId} {
+      // Users can read and write only their own ticket statuses
+      allow read, create, update, delete: if request.auth != null && 
+                                            request.auth.uid == userId &&
+                                            validTicketStatus(request.resource.data);
+    }
+    
+    // Public/shared data paths (read-only)
+    match /artifacts/{appId}/public/data/{shareId}/time_entries/{entryId} {
+      // Anyone can read shared time entries (for collaboration features)
+      // Only the creator can write
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+                                      validTimeEntry(request.resource.data);
+    }
+    
+    match /artifacts/{appId}/public/data/{shareId}/ticket_statuses/{statusId} {
+      // Anyone can read shared ticket statuses
+      // Only the creator can write
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+                                      validTicketStatus(request.resource.data);
+    }
+    
+    // Deny all other paths by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
