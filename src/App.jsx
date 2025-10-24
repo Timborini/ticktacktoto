@@ -543,7 +543,6 @@ const App = () => {
   const exportButtonRef = useRef(null);
   const exportMenuRef = useRef(null);
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
-  const [bulkActionMode, setBulkActionMode] = useState(false);
   const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
 
   useEffect(() => {
@@ -925,7 +924,7 @@ const App = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFocusIndex]);
+  }, [exportOption, exportFocusIndex, handleExport]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
