@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -12,6 +12,9 @@ import {
   getFirestore, collection, query, onSnapshot,
   doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
+
+// --- Toast Notifications ---
+import toast, { Toaster } from 'react-hot-toast';
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id'; 
@@ -98,32 +101,67 @@ const escapeCSV = (data) => {
 };
 
 /**
- * Custom Confirmation Modal Component
+ * Custom Confirmation Modal Component with Accessibility
  */
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
+    const confirmButtonRef = useRef(null);
+
+    // Focus management and Escape key handler
+    useEffect(() => {
+        if (isOpen) {
+            // Focus the confirm button when modal opens
+            setTimeout(() => confirmButtonRef.current?.focus(), 100);
+
+            // Handle Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onCancel();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onCancel]);
+
     if (!isOpen) return null;
 
     const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onCancel}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4"
+            onClick={(e) => {
+                // Only close on backdrop click for non-destructive actions
+                if (e.target === e.currentTarget && confirmText !== "Delete") {
+                    onCancel();
+                }
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+                aria-describedby="modal-description"
                 className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}>{title}</h3>
-                <div className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
+                <h3 
+                    id="modal-title"
+                    className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
+                >
+                    {title}
+                </h3>
+                <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
                 <div className="flex justify-end space-x-3">
                     <button
                         onClick={onCancel}
-                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
                     </button>
                     <button
+                        ref={confirmButtonRef}
                         onClick={onConfirm}
-                        className={`flex items-center space-x-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
+                        className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
                     >
                         <Check className="w-4 h-4" />
                         <span>{confirmText}</span>
@@ -136,19 +174,30 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
 
 const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm }) => {
     const [newTicketId, setNewTicketId] = useState('');
+    const selectRef = useRef(null);
 
     useEffect(() => {
         // Reset selection when modal opens or session changes
         if (isOpen) {
             setNewTicketId('');
+            // Focus the select element when modal opens
+            setTimeout(() => selectRef.current?.focus(), 100);
+
+            // Handle Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
         }
-    }, [isOpen, sessionInfo]);
+    }, [isOpen, sessionInfo, onClose]);
 
     if (!isOpen || !sessionInfo) return null;
 
     const handleConfirm = () => {
         if (newTicketId && newTicketId !== sessionInfo.currentTicketId) {
             onConfirm(sessionInfo.sessionId, newTicketId);
+            onClose();
         }
     };
 
@@ -156,13 +205,24 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reallocate-title"
+                aria-describedby="reallocate-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Reallocate Session</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                    Reallocate Session
+                </h3>
+                <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
                     Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
                 </p>
 
@@ -172,10 +232,11 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                             New Ticket ID
                         </label>
                         <select
+                            ref={selectRef}
                             id="ticket-reallocate"
                             value={newTicketId}
                             onChange={(e) => setNewTicketId(e.target.value)}
-                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                         >
                             <option value="" disabled>Select a ticket...</option>
                             {availableTickets.map(ticketId => (
@@ -185,10 +246,10 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                     </div>
                 </div>
                 
-                <div className="mt-8 flex justify-end space-x-3">
+                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="flex items-center space-x-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         <X className="w-4 h-4" />
                         <span>Cancel</span>
@@ -196,7 +257,7 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
                     <button
                         onClick={handleConfirm}
                         disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
-                        className="flex items-center space-x-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50"
+                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4" />
                         <span>Confirm Reallocation</span>
@@ -208,6 +269,20 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
 };
 
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
+    const copyButtonRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => copyButtonRef.current?.focus(), 100);
+
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const copyToClipboard = () => {
@@ -218,35 +293,48 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
             tempInput.select();
             document.execCommand('copy');
             document.body.removeChild(tempInput);
+            toast.success('Copied to clipboard!');
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" onClick={onClose}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-title"
+                aria-describedby="report-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
                     <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
                 </h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Copy this prompt and paste it into your preferred AI chat application.</p>
+                <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                    Copy this prompt and paste it into your preferred AI chat application.
+                </p>
                 
                 <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
                     <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
                 </div>
-                <div className="mt-6 flex justify-between items-center">
+                <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                     <button
+                        ref={copyButtonRef}
                         onClick={copyToClipboard}
                         disabled={!reportData?.text}
-                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50"
+                        className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Clipboard className="w-4 h-4" />
                         <span>Copy to Clipboard</span>
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                        className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
                     >
                         Close
                     </button>
@@ -256,57 +344,143 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     );
 };
 
-const InstructionsContent = () => (
-    <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-        <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Core Features:</h4>
-            <ul className="list-disc list-inside space-y-1">
-                <li><strong>Start/Stop Timer:</strong> Enter a ticket ID and hit 'START'. The timer will run until you PAUSE or STOP.</li>
-                <li><strong>Session Notes:</strong> Add notes to your running session. They are saved when you pause or stop.</li>
-                <li><strong>Inline Ticket Editing:</strong> Click the <Pencil className="w-4 h-4 inline-block -mt-1"/> icon next to a ticket ID to rename it across all its sessions.</li>
-                <li><strong>Session Reallocation:</strong> Click the <CornerUpRight className="w-4 h-4 inline-block -mt-1"/> icon on a session to move it to a different ticket.</li>
-                <li><strong>History & Filtering:</strong> Your completed sessions are grouped by ticket ID. Filter them by status (Open/Closed), date, or view 'Submitted' tickets.</li>
-                <li><strong>Manage Tickets:</strong> Mark tickets as 'Closed' to archive them, or 'Re-open' them if you need to track more time.</li>
-                <li><strong>Export Data:</strong> Export all logs, filtered logs, or selected logs to a CSV file.</li>
-            </ul>
+const InstructionsContent = () => {
+    const [expandedSection, setExpandedSection] = useState('getting-started');
+
+    const toggleSection = (section) => {
+        setExpandedSection(expandedSection === section ? null : section);
+    };
+
+    const Section = ({ id, icon: Icon, title, children }) => {
+        const isExpanded = expandedSection === id;
+        
+        return (
+            <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                <button
+                    onClick={() => toggleSection(id)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                    aria-expanded={isExpanded}
+                >
+                    <h4 className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
+                        <Icon className="w-4 h-4 mr-2" />
+                        {title}
+                    </h4>
+                    <span className="text-xl text-gray-400 dark:text-gray-500 font-light">
+                        {isExpanded ? '−' : '+'}
+                    </span>
+                </button>
+                
+                {isExpanded && (
+                    <div className="px-4 pb-4 text-sm text-gray-700 dark:text-gray-300">
+                        {children}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <Section id="getting-started" icon={Clock} title="Getting Started">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Start Timer:</strong> Enter ticket ID + 'START' or press <kbd className="kbd-key">Enter</kbd></li>
+                    <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
+                    <li><strong>Notifications:</strong> Alerts at 30min, 1hr, 2hr, 4hr milestones</li>
+                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Enter</kbd> or click 'PAUSE'</li>
+                </ul>
+            </Section>
+
+            <Section id="managing" icon={List} title="Managing Logs">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Edit:</strong> Click <Pencil className="w-3 h-3 inline-block -mt-1 text-blue-500"/> to rename tickets across all sessions</li>
+                    <li><strong>Reallocate:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-purple-500"/> to move sessions to different tickets</li>
+                    <li><strong>Delete:</strong> Click <Trash2 className="w-3 h-3 inline-block -mt-1 text-red-500"/> to remove sessions</li>
+                    <li><strong>Archive:</strong> Mark tickets as 'Closed' to filter them out</li>
+                </ul>
+            </Section>
+
+            <Section id="stats" icon={TrendingUp} title="Statistics & Insights">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li>Dashboard shows total time, status breakdown, and averages</li>
+                    <li>Stats update in real-time as you track</li>
+                    <li>Filter by date range or search to analyze specific periods</li>
+                </ul>
+            </Section>
+
+            <Section id="advanced" icon={Check} title="Advanced Features">
+                <ul className="list-disc list-inside space-y-1.5">
+                    <li><strong>Search:</strong> Find tickets instantly by ID</li>
+                    <li><strong>Date Filters:</strong> Today, Last 7/30 days, or custom range</li>
+                    <li><strong>Bulk Operations:</strong> Select multiple → delete or change status</li>
+                    <li><strong>Export:</strong> CSV of selected/filtered/all entries</li>
+                    <li><strong>Share:</strong> Filters saved in URL - share specific views!</li>
+                </ul>
+            </Section>
+
+            <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div><kbd className="kbd-key">Enter</kbd> Start/Pause/Resume</div>
+                    <div><kbd className="kbd-key">Ctrl+Space</kbd> Timer (anywhere)</div>
+                    <div><kbd className="kbd-key">Alt+Enter</kbd> Stop timer</div>
+                    <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
+                    <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
+                    <div><kbd className="kbd-key">Tab</kbd> Navigate UI</div>
+                </div>
+            </Section>
+
+            <Section id="tips" icon={Info} title="Pro Tips">
+                <ul className="list-disc list-inside space-y-1.5 text-xs">
+                    <li>Profile & recent tickets saved locally</li>
+                    <li>Limits: 200 chars (ticket), 5000 chars (notes)</li>
+                    <li>Use bulk ops for efficiency</li>
+                    <li>Data syncs via Firebase across devices</li>
+                </ul>
+            </Section>
         </div>
-        <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">AI-Ready Prompts & Workflow:</h4>
-            <ul className="list-disc list-inside space-y-1">
-                <li><strong>Multi-Item Draft:</strong> Select multiple tickets or individual sessions using the checkboxes, then click the "AI Draft" button at the top of the history section.</li>
-                <li>After creating a draft, you'll be prompted to mark the selected items as 'submitted'.</li>
-                <li>Submitted sessions are hidden by default and marked with a <Check className="w-4 h-4 inline-block -mt-1 text-green-500"/>. Use the filter to view them again.</li>
-            </ul>
-        </div>
-         <div>
-            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Keyboard Shortcuts:</h4>
-             <ul className="list-disc list-inside space-y-1">
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</li>
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Ctrl + Space</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Space</span>: Start / Pause / Resume timer (works everywhere, even while typing notes).</li>
-                <li><span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Alt + Enter</span> or <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">Cmd + Enter</span>: Stop and finalize the current entry.</li>
-            </ul>
-        </div>
-    </div>
-);
+    );
+};
 
 const WelcomeModal = ({ isOpen, onClose }) => {
+    const closeButtonRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => closeButtonRef.current?.focus(), 100);
+            
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') onClose();
+            };
+            window.addEventListener('keydown', handleEscape);
+            return () => window.removeEventListener('keydown', handleEscape);
+        }
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
             <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="welcome-title"
+                aria-describedby="welcome-description"
                 className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Welcome to TickTackToto!</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">Here’s a quick guide to get you started:</p>
+                <h2 id="welcome-title" className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
+                    Welcome to TickTackToto!
+                </h2>
+                <p id="welcome-description" className="text-gray-600 dark:text-gray-400 mb-6">
+                    Here's a quick guide to get you started:
+                </p>
                 
                 <InstructionsContent />
 
                 <div className="mt-8 flex justify-end">
                     <button
+                        ref={closeButtonRef}
                         onClick={onClose}
-                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
+                        className="px-6 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
                     >
                         Get Started
                     </button>
@@ -397,10 +571,14 @@ const App = () => {
   // --- Filter & Selection State ---
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRangeStart, setDateRangeStart] = useState('');
+  const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
   const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
+  const [recentTicketIds, setRecentTicketIds] = useState([]);
 
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -425,6 +603,11 @@ const App = () => {
   const stopTimerRef = useRef(null);
   const editingTicketIdRef = useRef(null);
   const exportOptionRef = useRef('');
+  const exportButtonRef = useRef(null);
+  const exportMenuRef = useRef(null);
+  const [exportFocusIndex, setExportFocusIndex] = useState(0);
+  const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
+  const handleExportRef = useRef(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -442,15 +625,88 @@ const App = () => {
         localStorage.setItem('hasVisitedTimeTracker', 'true');
     }
   }, []);
+
+  // Load user profile from localStorage
+  useEffect(() => {
+    const savedTitle = localStorage.getItem('userTitle');
+    if (savedTitle) {
+      setUserTitle(savedTitle);
+    }
+  }, []);
+
+  // Save user profile to localStorage with debounce
+  useEffect(() => {
+    if (!userTitle) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem('userTitle', userTitle);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [userTitle]);
+
+  // Load recent ticket IDs from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('recentTicketIds');
+    if (saved) {
+      try {
+        setRecentTicketIds(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading recent tickets:', e);
+      }
+    }
+  }, []);
+
+  // Track recent ticket IDs when new sessions are created
+  useEffect(() => {
+    if (logs.length > 0) {
+      const uniqueTickets = [...new Set(logs.map(log => log.ticketId))];
+      const recent = uniqueTickets.slice(0, 10); // Keep last 10 unique
+      setRecentTicketIds(recent);
+      localStorage.setItem('recentTicketIds', JSON.stringify(recent));
+    }
+  }, [logs]);
   
-  // --- Check for Share ID in URL on initial load ---
+  // --- URL State Management: Read filters from URL on load ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    
+    // Check for share ID
     const id = urlParams.get('shareId');
     if (id) {
       setShareId(id);
     }
+
+    // Read filter state from URL
+    const urlStatus = urlParams.get('status');
+    const urlSearch = urlParams.get('search');
+    const urlDateStart = urlParams.get('dateStart');
+    const urlDateEnd = urlParams.get('dateEnd');
+
+    if (urlStatus) setStatusFilter(urlStatus);
+    if (urlSearch) setSearchQuery(urlSearch);
+    if (urlDateStart) setDateRangeStart(urlDateStart);
+    if (urlDateEnd) setDateRangeEnd(urlDateEnd);
   }, []);
+
+  // --- URL State Management: Update URL when filters change ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Preserve shareId if it exists
+    const shareId = params.get('shareId');
+    const newParams = new URLSearchParams();
+    
+    if (shareId) newParams.set('shareId', shareId);
+    if (statusFilter && statusFilter !== 'All') newParams.set('status', statusFilter);
+    if (searchQuery) newParams.set('search', searchQuery);
+    if (dateRangeStart) newParams.set('dateStart', dateRangeStart);
+    if (dateRangeEnd) newParams.set('dateEnd', dateRangeEnd);
+
+    const newUrl = newParams.toString() 
+      ? `${window.location.pathname}?${newParams.toString()}`
+      : window.location.pathname;
+    
+    window.history.replaceState({}, '', newUrl);
+  }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd]);
 
   // --- Firebase Initialization and Authentication ---
   useEffect(() => {
@@ -641,16 +897,40 @@ const App = () => {
       // Immediate update before starting interval
       const updateTimer = () => {
         const currentRunDuration = Date.now() - activeLogData.startTime;
-        setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
+        const newElapsedMs = activeLogData.accumulatedMs + currentRunDuration;
+        setElapsedMs(newElapsedMs);
+
+        // Check for milestones (30min, 1hr, 2hr, 4hr)
+        const milestones = [
+          { ms: 30 * 60 * 1000, label: '30 minutes' },
+          { ms: 60 * 60 * 1000, label: '1 hour' },
+          { ms: 2 * 60 * 60 * 1000, label: '2 hours' },
+          { ms: 4 * 60 * 60 * 1000, label: '4 hours' }
+        ];
+
+        for (const milestone of milestones) {
+          // Check if we just crossed this milestone (within 1 second)
+          if (newElapsedMs >= milestone.ms && newElapsedMs < milestone.ms + 1000) {
+            if (timerMilestone !== milestone.label) {
+              setTimerMilestone(milestone.label);
+              toast(`⏰ Timer reached ${milestone.label}!`, {
+                icon: '🎯',
+                duration: 4000,
+              });
+            }
+          }
+        }
       };
       
       updateTimer(); // Update immediately
       interval = setInterval(updateTimer, 1000); // Then update every second
+    } else {
+      setTimerMilestone(null); // Reset milestone when timer stops
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerRunning, runningLogDocId, activeLogData]);
+  }, [isTimerRunning, runningLogDocId, activeLogData, timerMilestone]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -668,6 +948,7 @@ const App = () => {
     const handleClickOutside = (event) => {
       if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
         setExportOption('');
+        setExportFocusIndex(0);
       }
     };
 
@@ -676,18 +957,72 @@ const App = () => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [exportOption]);
+
+  // --- Keyboard navigation for export dropdown ---
+  useEffect(() => {
+    if (exportOption !== 'menu') return;
+
+    const handleKeyDown = (e) => {
+      const exportOptions = ['selected', 'filtered', 'all'];
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setExportFocusIndex((prev) => (prev + 1) % exportOptions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setExportFocusIndex((prev) => (prev - 1 + exportOptions.length) % exportOptions.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (handleExportRef.current) {
+          handleExportRef.current(exportOptions[exportFocusIndex]);
+        }
+        setExportOption('');
+        setExportFocusIndex(0);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setExportOption('');
+        setExportFocusIndex(0);
+        if (exportButtonRef.current) {
+          exportButtonRef.current.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [exportOption, exportFocusIndex]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
-    const dateFilteredLogs = dateFilter
-      ? logs.filter(log => {
-          if (!log.endTime) return false;
-          const logDate = new Date(log.endTime).toISOString().split('T')[0];
-          return logDate === dateFilter;
-        })
-      : logs;
+    // Apply date filtering (single date or date range)
+    let dateFilteredLogs = logs;
+    
+    if (dateRangeStart || dateRangeEnd) {
+      // Date range filtering
+      dateFilteredLogs = logs.filter(log => {
+        if (!log.endTime) return false;
+        const logDate = new Date(log.endTime).toISOString().split('T')[0];
+        if (dateRangeStart && logDate < dateRangeStart) return false;
+        if (dateRangeEnd && logDate > dateRangeEnd) return false;
+        return true;
+      });
+    } else if (dateFilter) {
+      // Single date filtering (legacy support)
+      dateFilteredLogs = logs.filter(log => {
+        if (!log.endTime) return false;
+        const logDate = new Date(log.endTime).toISOString().split('T')[0];
+        return logDate === dateFilter;
+      });
+    }
 
-    const groups = dateFilteredLogs.reduce((acc, log) => {
+    // Apply search filtering
+    const searchFilteredLogs = searchQuery
+      ? dateFilteredLogs.filter(log => 
+          log.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : dateFilteredLogs;
+
+    const groups = searchFilteredLogs.reduce((acc, log) => {
       const id = log.ticketId;
       if (!acc[id]) {
         acc[id] = {
@@ -734,7 +1069,7 @@ const App = () => {
 
 
     return statusFilteredGroups;
-  }, [logs, ticketStatuses, statusFilter, dateFilter]);
+  }, [logs, ticketStatuses, statusFilter, dateFilter, dateRangeStart, dateRangeEnd, searchQuery]);
 
   const totalFilteredTimeMs = useMemo(() => {
     return filteredAndGroupedLogs.reduce((total, group) => total + group.totalDurationMs, 0);
@@ -945,6 +1280,53 @@ const App = () => {
     setIsConfirmingDelete(false);
     setLogToDelete(null);
   }, []);
+
+  // --- Bulk Operations ---
+  const handleBulkDelete = useCallback(async () => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+    
+    const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
+    if (!confirmDelete) return;
+
+    setIsLoading(true);
+    try {
+      const deletePromises = Array.from(selectedSessions).map(sessionId =>
+        deleteDoc(doc(getCollectionRef, sessionId))
+      );
+      await Promise.all(deletePromises);
+      setSelectedSessions(new Set());
+      toast.success(`Successfully deleted ${selectedSessions.size} session(s)`);
+    } catch (error) {
+      console.error('Error deleting sessions:', error);
+      setFirebaseError('Failed to delete some sessions.');
+      toast.error('Failed to delete some sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getCollectionRef, selectedSessions]);
+
+  const handleBulkStatusChange = useCallback(async (newStatus) => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+
+    setIsLoading(true);
+    try {
+      const updatePromises = Array.from(selectedSessions).map(sessionId =>
+        updateDoc(doc(getCollectionRef, sessionId), { 
+          status: newStatus,
+          ...(newStatus === 'submitted' ? { submissionDate: Date.now() } : {})
+        })
+      );
+      await Promise.all(updatePromises);
+      setSelectedSessions(new Set());
+      toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating session status:', error);
+      setFirebaseError('Failed to update some sessions.');
+      toast.error('Failed to update some sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getCollectionRef, selectedSessions]);
   
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
@@ -1233,6 +1615,11 @@ ${combinedReport.trim()}
     }
   }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
 
+  // Update handleExportRef for keyboard navigation
+  useEffect(() => {
+    handleExportRef.current = handleExport;
+  }, [handleExport]);
+
   const handleToggleSelectTicket = (ticketId) => {
     setSelectedTickets(prevSelected => {
         const newSelected = new Set(prevSelected);
@@ -1394,6 +1781,30 @@ ${combinedReport.trim()}
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 2000,
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <ConfirmationModal
         isOpen={isConfirmingDelete}
@@ -1436,7 +1847,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl mx-auto py-8">
+      <div className="max-w-xl lg:max-w-2xl xl:max-w-4xl mx-auto py-8">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -1471,13 +1882,13 @@ ${combinedReport.trim()}
                 </div>
 
                 {showInstructions && (
-                    <section className="absolute z-10 top-full mt-2 w-96 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
+                    <section className="absolute z-10 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
                         <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">How to Use This Tracker</h3>
                         <InstructionsContent />
                         <div className="mt-6 text-center">
                             <button
                                 onClick={() => setShowInstructions(false)}
-                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                                className="flex items-center justify-center w-full space-x-2 px-4 py-2 min-h-[44px] bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
                             >
                                 <X className="w-4 h-4" />
                                 <span>Hide Instructions</span>
@@ -1530,35 +1941,65 @@ ${combinedReport.trim()}
             <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
           </div>
 
-          <input
-            type="text"
-            placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
-            value={currentTicketId}
-            onChange={(e) => setCurrentTicketId(e.target.value)}
-            disabled={isInputDisabled}
-            className={`w-full p-3 mb-4 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
-          />
+          <div className="relative mb-1">
+            <input
+              type="text"
+              list="recent-tickets"
+              placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
+              value={currentTicketId}
+              onChange={(e) => setCurrentTicketId(e.target.value)}
+              disabled={isInputDisabled}
+              maxLength={200}
+              className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
+            />
+            <datalist id="recent-tickets">
+              {recentTicketIds.map(id => (
+                <option key={id} value={id} />
+              ))}
+            </datalist>
+            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+              {currentTicketId.length}/200
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            e.g., PROJ-123, JIRA-456, or any custom format
+          </p>
           {isInputTicketClosed && (
               <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
           {(isTimerRunning || isTimerPaused) && (
             <div className="mb-4">
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1">Session Notes (Saved on Pause/Stop)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
+                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {currentNote.length}/5000
+                  </span>
+                </div>
                 <textarea
                     placeholder="E.g., Fixed critical bug in user authentication module."
                     value={currentNote}
                     onChange={(e) => setCurrentNote(e.target.value)}
-                    rows="2"
+                    maxLength={5000}
+                    rows="4"
                     className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
                 />
             </div>
           )}
 
-          <div className={`text-center py-4 rounded-xl mb-6 transition-colors ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}>
-            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">{formatTime(elapsedMs)}</p>
+          <div 
+            className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">
+              <span className="sr-only">Timer: </span>
+              {formatTime(elapsedMs)}
+            </p>
             {(isTimerRunning || isTimerPaused) && (
-                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>{isTimerRunning ? 'Running' : 'Paused'}</p>
+                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
+                  {isTimerRunning ? 'Running' : 'Paused'}
+                </p>
             )}
           </div>
 
@@ -1589,10 +2030,80 @@ ${combinedReport.trim()}
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-end">
+            
+            {/* Search Input */}
+            <div className="mb-4">
+                <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Search Tickets
+                </label>
+                <div className="relative">
+                    <input
+                        type="search"
+                        id="search-filter"
+                        placeholder="Search by ticket ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full p-2 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Quick Date Filters */}
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Quick Filters
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => {
+                            const today = new Date().toISOString().split('T')[0];
+                            setDateRangeStart(today);
+                            setDateRangeEnd(today);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Today
+                    </button>
+                    <button
+                        onClick={() => {
+                            const today = new Date();
+                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            setDateRangeStart(weekAgo.toISOString().split('T')[0]);
+                            setDateRangeEnd(today.toISOString().split('T')[0]);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Last 7 Days
+                    </button>
+                    <button
+                        onClick={() => {
+                            const today = new Date();
+                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            setDateRangeStart(monthAgo.toISOString().split('T')[0]);
+                            setDateRangeEnd(today.toISOString().split('T')[0]);
+                            setDateFilter('');
+                        }}
+                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                    >
+                        Last 30 Days
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
                 <div>
                     <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="All">All Unsubmitted</option>
                         <option value="Open">Open</option>
                         <option value="Closed">Closed</option>
@@ -1600,20 +2111,162 @@ ${combinedReport.trim()}
                     </select>
                 </div>
                 <div>
-                    <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-                    <input type="date" id="date-filter" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                    <input 
+                        type="date" 
+                        id="date-start" 
+                        value={dateRangeStart} 
+                        onChange={(e) => {
+                            setDateRangeStart(e.target.value);
+                            setDateFilter('');
+                        }} 
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
                 </div>
-                <button onClick={() => { setStatusFilter('All'); setDateFilter(''); }} className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]">
-                     Clear Filters
+                <div>
+                    <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                    <input 
+                        type="date" 
+                        id="date-end" 
+                        value={dateRangeEnd} 
+                        onChange={(e) => {
+                            setDateRangeEnd(e.target.value);
+                            setDateFilter('');
+                        }} 
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                </div>
+                <button 
+                    onClick={() => { 
+                        setStatusFilter('All'); 
+                        setDateFilter(''); 
+                        setDateRangeStart(''); 
+                        setDateRangeEnd(''); 
+                        setSearchQuery(''); 
+                    }} 
+                    className="w-full sm:w-auto px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                >
+                     Clear All Filters
                  </button>
             </div>
-            <div className="bg-indigo-50 dark:bg-gray-700/50 p-4 rounded-lg text-center shadow-inner">
-                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">Total Time for Selected Filters</p>
-                <p className="text-2xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mt-1">{formatTime(totalFilteredTimeMs)}</p>
+            {/* Statistics Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                {/* Total Time Card */}
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-4 rounded-lg shadow-md border border-indigo-200 dark:border-indigo-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
+                        <Clock className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+                    </div>
+                    <p className="text-3xl font-bold font-mono text-indigo-900 dark:text-indigo-100">{formatTime(totalFilteredTimeMs)}</p>
+                    {filteredAndGroupedLogs.length > 0 && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                            {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+                        </p>
+                    )}
+                </div>
+
+                {/* Submitted vs Unsubmitted Card */}
+                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
+                        <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
+                            <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                {logs.filter(l => l.status === 'submitted').length}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
+                            <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                                {logs.filter(l => l.status !== 'submitted').length}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Average Session Time Card */}
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
+                        <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                    </div>
+                    <p className="text-3xl font-bold font-mono text-purple-900 dark:text-purple-100">
+                        {logs.length > 0 
+                            ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
+                            : '00:00:00'
+                        }
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                        Per session across all time
+                    </p>
+                </div>
             </div>
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
+          {/* Bulk Actions Bar */}
+          {selectedSessions.size > 0 && (
+            <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedSessions.size > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      // Select all visible sessions
+                      const allSessions = new Set();
+                      filteredAndGroupedLogs.forEach(group => {
+                        group.sessions.forEach(session => allSessions.add(session.id));
+                      });
+                      setSelectedSessions(allSessions);
+                    } else {
+                      setSelectedSessions(new Set());
+                    }
+                  }}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                  {selectedSessions.size} session(s) selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => handleBulkStatusChange('submitted')}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Check className="h-4 w-4" />
+                  Mark Submitted
+                </button>
+                <button
+                  onClick={() => handleBulkStatusChange('unsubmitted')}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Mark Unsubmitted
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedSessions(new Set())}
+                  className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
             <div className="flex items-center gap-2">
@@ -1636,33 +2289,44 @@ ${combinedReport.trim()}
                 )}
                 <div className="relative export-dropdown">
                   <button
+                    ref={exportButtonRef}
                     onClick={() => setExportOption(exportOption ? '' : 'menu')}
                     className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     aria-label="Export"
+                    aria-expanded={exportOption === 'menu'}
+                    aria-haspopup="true"
                   >
                     <Download className="h-5 w-5" />
                   </button>
                   
                   {exportOption === 'menu' && (
-                    <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]">
+                    <div 
+                      ref={exportMenuRef}
+                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]"
+                      role="menu"
+                      aria-label="Export options"
+                    >
                       <button
                         onClick={() => handleExport('selected')}
                         disabled={isActionDisabled}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export Selected
                       </button>
                       <button
                         onClick={() => handleExport('filtered')}
                         disabled={filteredAndGroupedLogs.length === 0}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export Filtered
                       </button>
                       <button
                         onClick={() => handleExport('all')}
                         disabled={logs.length === 0}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export All
                       </button>
@@ -1684,7 +2348,27 @@ ${combinedReport.trim()}
                     Select All Visible
                 </label>
             </div>
-          {filteredAndGroupedLogs.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-center py-4">No finished logs match your current filters.</p>}
+          {filteredAndGroupedLogs.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <List className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
+              <p className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+                {logs.length === 0 ? "No time logs yet" : "No logs match your filters"}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 max-w-sm">
+                {logs.length === 0 
+                  ? "Start tracking time by entering a ticket ID and clicking START above" 
+                  : "Try adjusting your filters or clearing them to see more results"}
+              </p>
+              {(statusFilter !== 'All' || dateFilter) && (
+                <button
+                  onClick={() => { setStatusFilter('All'); setDateFilter(''); }}
+                  className="mt-4 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors text-sm font-medium"
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          )}
           <ul className="space-y-6 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
