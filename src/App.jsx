@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -540,6 +540,11 @@ const App = () => {
   const stopTimerRef = useRef(null);
   const editingTicketIdRef = useRef(null);
   const exportOptionRef = useRef('');
+  const exportButtonRef = useRef(null);
+  const exportMenuRef = useRef(null);
+  const [exportFocusIndex, setExportFocusIndex] = useState(0);
+  const [bulkActionMode, setBulkActionMode] = useState(false);
+  const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -597,14 +602,48 @@ const App = () => {
     }
   }, [logs]);
   
-  // --- Check for Share ID in URL on initial load ---
+  // --- URL State Management: Read filters from URL on load ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    
+    // Check for share ID
     const id = urlParams.get('shareId');
     if (id) {
       setShareId(id);
     }
+
+    // Read filter state from URL
+    const urlStatus = urlParams.get('status');
+    const urlSearch = urlParams.get('search');
+    const urlDateStart = urlParams.get('dateStart');
+    const urlDateEnd = urlParams.get('dateEnd');
+
+    if (urlStatus) setStatusFilter(urlStatus);
+    if (urlSearch) setSearchQuery(urlSearch);
+    if (urlDateStart) setDateRangeStart(urlDateStart);
+    if (urlDateEnd) setDateRangeEnd(urlDateEnd);
   }, []);
+
+  // --- URL State Management: Update URL when filters change ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Preserve shareId if it exists
+    const shareId = params.get('shareId');
+    const newParams = new URLSearchParams();
+    
+    if (shareId) newParams.set('shareId', shareId);
+    if (statusFilter && statusFilter !== 'All') newParams.set('status', statusFilter);
+    if (searchQuery) newParams.set('search', searchQuery);
+    if (dateRangeStart) newParams.set('dateStart', dateRangeStart);
+    if (dateRangeEnd) newParams.set('dateEnd', dateRangeEnd);
+
+    const newUrl = newParams.toString() 
+      ? `${window.location.pathname}?${newParams.toString()}`
+      : window.location.pathname;
+    
+    window.history.replaceState({}, '', newUrl);
+  }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd]);
 
   // --- Firebase Initialization and Authentication ---
   useEffect(() => {
@@ -795,16 +834,40 @@ const App = () => {
       // Immediate update before starting interval
       const updateTimer = () => {
         const currentRunDuration = Date.now() - activeLogData.startTime;
-        setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
+        const newElapsedMs = activeLogData.accumulatedMs + currentRunDuration;
+        setElapsedMs(newElapsedMs);
+
+        // Check for milestones (30min, 1hr, 2hr, 4hr)
+        const milestones = [
+          { ms: 30 * 60 * 1000, label: '30 minutes' },
+          { ms: 60 * 60 * 1000, label: '1 hour' },
+          { ms: 2 * 60 * 60 * 1000, label: '2 hours' },
+          { ms: 4 * 60 * 60 * 1000, label: '4 hours' }
+        ];
+
+        for (const milestone of milestones) {
+          // Check if we just crossed this milestone (within 1 second)
+          if (newElapsedMs >= milestone.ms && newElapsedMs < milestone.ms + 1000) {
+            if (timerMilestone !== milestone.label) {
+              setTimerMilestone(milestone.label);
+              toast(`⏰ Timer reached ${milestone.label}!`, {
+                icon: '🎯',
+                duration: 4000,
+              });
+            }
+          }
+        }
       };
       
       updateTimer(); // Update immediately
       interval = setInterval(updateTimer, 1000); // Then update every second
+    } else {
+      setTimerMilestone(null); // Reset milestone when timer stops
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerRunning, runningLogDocId, activeLogData]);
+  }, [isTimerRunning, runningLogDocId, activeLogData, timerMilestone]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -822,6 +885,7 @@ const App = () => {
     const handleClickOutside = (event) => {
       if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
         setExportOption('');
+        setExportFocusIndex(0);
       }
     };
 
@@ -830,6 +894,38 @@ const App = () => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [exportOption]);
+
+  // --- Keyboard navigation for export dropdown ---
+  useEffect(() => {
+    if (exportOption !== 'menu') return;
+
+    const handleKeyDown = (e) => {
+      const exportOptions = ['selected', 'filtered', 'all'];
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setExportFocusIndex((prev) => (prev + 1) % exportOptions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setExportFocusIndex((prev) => (prev - 1 + exportOptions.length) % exportOptions.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleExport(exportOptions[exportFocusIndex]);
+        setExportOption('');
+        setExportFocusIndex(0);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setExportOption('');
+        setExportFocusIndex(0);
+        if (exportButtonRef.current) {
+          exportButtonRef.current.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [exportOption, exportFocusIndex]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1119,6 +1215,53 @@ const App = () => {
     setIsConfirmingDelete(false);
     setLogToDelete(null);
   }, []);
+
+  // --- Bulk Operations ---
+  const handleBulkDelete = useCallback(async () => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+    
+    const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
+    if (!confirmDelete) return;
+
+    setIsLoading(true);
+    try {
+      const deletePromises = Array.from(selectedSessions).map(sessionId =>
+        deleteDoc(doc(getCollectionRef, sessionId))
+      );
+      await Promise.all(deletePromises);
+      setSelectedSessions(new Set());
+      toast.success(`Successfully deleted ${selectedSessions.size} session(s)`);
+    } catch (error) {
+      console.error('Error deleting sessions:', error);
+      setFirebaseError('Failed to delete some sessions.');
+      toast.error('Failed to delete some sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getCollectionRef, selectedSessions]);
+
+  const handleBulkStatusChange = useCallback(async (newStatus) => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+
+    setIsLoading(true);
+    try {
+      const updatePromises = Array.from(selectedSessions).map(sessionId =>
+        updateDoc(doc(getCollectionRef, sessionId), { 
+          status: newStatus,
+          ...(newStatus === 'submitted' ? { submissionDate: Date.now() } : {})
+        })
+      );
+      await Promise.all(updatePromises);
+      setSelectedSessions(new Set());
+      toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating session status:', error);
+      setFirebaseError('Failed to update some sessions.');
+      toast.error('Failed to update some sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getCollectionRef, selectedSessions]);
   
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
@@ -1936,18 +2079,124 @@ ${combinedReport.trim()}
                      Clear All Filters
                  </button>
             </div>
-            <div className="bg-indigo-50 dark:bg-gray-700/50 p-4 rounded-lg text-center shadow-inner">
-                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">Total Time for Selected Filters</p>
-                <p className="text-2xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mt-1">{formatTime(totalFilteredTimeMs)}</p>
-                {filteredAndGroupedLogs.length > 0 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {filteredAndGroupedLogs.length} ticket(s) shown
+            {/* Statistics Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                {/* Total Time Card */}
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-4 rounded-lg shadow-md border border-indigo-200 dark:border-indigo-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
+                        <Clock className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+                    </div>
+                    <p className="text-3xl font-bold font-mono text-indigo-900 dark:text-indigo-100">{formatTime(totalFilteredTimeMs)}</p>
+                    {filteredAndGroupedLogs.length > 0 && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                            {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+                        </p>
+                    )}
+                </div>
+
+                {/* Submitted vs Unsubmitted Card */}
+                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
+                        <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
+                            <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                {logs.filter(l => l.status === 'submitted').length}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
+                            <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                                {logs.filter(l => l.status !== 'submitted').length}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Average Session Time Card */}
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
+                        <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                    </div>
+                    <p className="text-3xl font-bold font-mono text-purple-900 dark:text-purple-100">
+                        {logs.length > 0 
+                            ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
+                            : '00:00:00'
+                        }
                     </p>
-                )}
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                        Per session across all time
+                    </p>
+                </div>
             </div>
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
+          {/* Bulk Actions Bar */}
+          {selectedSessions.size > 0 && (
+            <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedSessions.size > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      // Select all visible sessions
+                      const allSessions = new Set();
+                      filteredAndGroupedLogs.forEach(group => {
+                        group.sessions.forEach(session => allSessions.add(session.id));
+                      });
+                      setSelectedSessions(allSessions);
+                    } else {
+                      setSelectedSessions(new Set());
+                    }
+                  }}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                  {selectedSessions.size} session(s) selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => handleBulkStatusChange('submitted')}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Check className="h-4 w-4" />
+                  Mark Submitted
+                </button>
+                <button
+                  onClick={() => handleBulkStatusChange('unsubmitted')}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Mark Unsubmitted
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedSessions(new Set())}
+                  className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
             <div className="flex items-center gap-2">
@@ -1970,33 +2219,44 @@ ${combinedReport.trim()}
                 )}
                 <div className="relative export-dropdown">
                   <button
+                    ref={exportButtonRef}
                     onClick={() => setExportOption(exportOption ? '' : 'menu')}
                     className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     aria-label="Export"
+                    aria-expanded={exportOption === 'menu'}
+                    aria-haspopup="true"
                   >
                     <Download className="h-5 w-5" />
                   </button>
                   
                   {exportOption === 'menu' && (
-                    <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]">
+                    <div 
+                      ref={exportMenuRef}
+                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]"
+                      role="menu"
+                      aria-label="Export options"
+                    >
                       <button
                         onClick={() => handleExport('selected')}
                         disabled={isActionDisabled}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export Selected
                       </button>
                       <button
                         onClick={() => handleExport('filtered')}
                         disabled={filteredAndGroupedLogs.length === 0}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export Filtered
                       </button>
                       <button
                         onClick={() => handleExport('all')}
                         disabled={logs.length === 0}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg"
+                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                        role="menuitem"
                       >
                         Export All
                       </button>
