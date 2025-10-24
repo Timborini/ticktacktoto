@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
   Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight
 } from 'lucide-react';
@@ -54,6 +54,47 @@ const formatTime = (ms) => {
   return [hours, minutes, seconds]
     .map(unit => String(unit).padStart(2, '0'))
     .join(':');
+};
+
+/**
+ * Security: Sanitize ticket ID input to prevent XSS and injection attacks
+ * @param {string} ticketId - Raw ticket ID input
+ * @returns {string} Sanitized ticket ID
+ */
+const sanitizeTicketId = (ticketId) => {
+  if (!ticketId) return '';
+  return ticketId
+    .trim()
+    .replace(/[<>]/g, '') // Remove potentially dangerous HTML characters
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .substring(0, 200); // Limit length to prevent abuse
+};
+
+/**
+ * Security: Sanitize note input to prevent XSS attacks
+ * @param {string} note - Raw note input
+ * @returns {string} Sanitized note
+ */
+const sanitizeNote = (note) => {
+  if (!note) return '';
+  return note
+    .replace(/[<>]/g, '') // Remove potentially dangerous HTML characters
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .substring(0, 5000); // Limit length to prevent abuse
+};
+
+/**
+ * Security: Escape CSV data to prevent formula injection attacks
+ * @param {string} data - Raw data to be exported to CSV
+ * @returns {string} Safely escaped CSV data
+ */
+const escapeCSV = (data) => {
+  const str = String(data);
+  // Prevent CSV injection by prefixing dangerous characters with a single quote
+  if (str.match(/^[=+\-@\t\r]/)) {
+    return `"'${str.replace(/"/g, '""')}"`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 };
 
 /**
@@ -277,6 +318,50 @@ const WelcomeModal = ({ isOpen, onClose }) => {
 
 
 /**
+ * Error Boundary Component to catch and handle React errors gracefully
+ */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md shadow-2xl">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="h-8 w-8 text-red-500 mr-3" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Something went wrong</h1>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              The application encountered an unexpected error. Please refresh the page to continue.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+/**
  * Main application component for time tracking.
  */
 const App = () => {
@@ -332,6 +417,14 @@ const App = () => {
 
   // --- Theme State ---
   const [theme, setTheme] = useState('light');
+
+  // --- Performance: Refs for stable event handler references ---
+  const actionHandlerRef = useRef(null);
+  const isButtonDisabledRef = useRef(false);
+  const isStopButtonDisabledRef = useRef(false);
+  const stopTimerRef = useRef(null);
+  const editingTicketIdRef = useRef(null);
+  const exportOptionRef = useRef('');
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -516,13 +609,16 @@ const App = () => {
         }
       } else {
         if (runningLogDocId) {
-            setIsTimerRunning(false);
-            setIsTimerPaused(false);
-            setRunningLogDocId(null);
-            setActiveLogData(null); 
-            setCurrentTicketId('');
-            setCurrentNote('');
-            setElapsedMs(0);
+            // Batch non-urgent state updates for better performance
+            startTransition(() => {
+              setIsTimerRunning(false);
+              setIsTimerPaused(false);
+              setRunningLogDocId(null);
+              setActiveLogData(null); 
+              setCurrentTicketId('');
+              setCurrentNote('');
+              setElapsedMs(0);
+            });
         }
       }
 
@@ -538,21 +634,21 @@ const App = () => {
     return () => unsubscribe();
   }, [isAuthReady, getCollectionRef, runningLogDocId]);
 
-  // --- Timer Interval Effect ---
+  // --- Timer Interval Effect (Optimized) ---
   useEffect(() => {
     let interval = null;
-    if (isTimerRunning && runningLogDocId) {
-      interval = setInterval(() => {
-         if(activeLogData && activeLogData.startTime) {
-            const currentRunDuration = Date.now() - activeLogData.startTime;
-            setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
-         }
-      }, 1000);
+    if (isTimerRunning && runningLogDocId && activeLogData?.startTime) {
+      // Immediate update before starting interval
+      const updateTimer = () => {
+        const currentRunDuration = Date.now() - activeLogData.startTime;
+        setElapsedMs(activeLogData.accumulatedMs + currentRunDuration);
+      };
+      
+      updateTimer(); // Update immediately
+      interval = setInterval(updateTimer, 1000); // Then update every second
     }
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+      if (interval) clearInterval(interval);
     };
   }, [isTimerRunning, runningLogDocId, activeLogData]);
 
@@ -562,10 +658,15 @@ const App = () => {
     setSelectedSessions(new Set());
   }, [statusFilter, dateFilter]);
 
-  // --- Effect to close export dropdown when clicking outside ---
+  // --- Update refs for performance optimization ---
+  useEffect(() => {
+    exportOptionRef.current = exportOption;
+  }, [exportOption]);
+
+  // --- Effect to close export dropdown when clicking outside (Optimized) ---
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (exportOption === 'menu' && !event.target.closest('.export-dropdown')) {
+      if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
         setExportOption('');
       }
     };
@@ -622,9 +723,12 @@ const App = () => {
           return true;
         });
 
+    // Optimized sorting: Use reduce instead of Math.max with spread to reduce memory allocation
     statusFilteredGroups.sort((a, b) => {
-        const lastSessionA = Math.max(...a.sessions.map(s => s.endTime).filter(Boolean));
-        const lastSessionB = Math.max(...b.sessions.map(s => s.endTime).filter(Boolean));
+        const lastSessionA = a.sessions.reduce((max, s) => 
+          s.endTime && s.endTime > max ? s.endTime : max, 0);
+        const lastSessionB = b.sessions.reduce((max, s) => 
+          s.endTime && s.endTime > max ? s.endTime : max, 0);
         return lastSessionB - lastSessionA;
     });
 
@@ -656,7 +760,7 @@ const App = () => {
       await updateDoc(doc(getCollectionRef, runningLogDocId), {
         startTime: null,
         accumulatedMs: newAccumulatedMs,
-        note: currentNote.trim(),
+        note: sanitizeNote(currentNote),
       });
     } catch (error) {
       console.error('Error pausing timer:', error);
@@ -687,7 +791,7 @@ const App = () => {
         endTime: finalStopTime,
         startTime: null,
         accumulatedMs: finalAccumulatedMs,
-        note: currentNote.trim(),
+        note: sanitizeNote(currentNote),
         status: 'unsubmitted' // Ensure new logs are unsubmitted
       });
       
@@ -710,11 +814,11 @@ const App = () => {
     const startTimestamp = Date.now();
     try {
         const newEntry = {
-            ticketId: ticketId.trim(),
+            ticketId: sanitizeTicketId(ticketId),
             startTime: startTimestamp,
             endTime: null,
             accumulatedMs: 0,
-            note: note.trim(),
+            note: sanitizeNote(note),
             status: 'unsubmitted', // Default status
             createdAt: startTimestamp // Track when session was originally created
         };
@@ -739,7 +843,7 @@ const App = () => {
         if (!runningLogDocId) throw new Error("Paused log ID missing.");
         await updateDoc(doc(getCollectionRef, runningLogDocId), {
           startTime: startTimestamp,
-          note: currentNote.trim(),
+          note: sanitizeNote(currentNote),
         });
       } else {
         await startNewSession(currentTicketId, currentNote);
@@ -843,12 +947,13 @@ const App = () => {
   }, []);
   
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
-    if (!sessionId || !newTicketId || !getCollectionRef) return;
+    const sanitizedTicketId = sanitizeTicketId(newTicketId);
+    if (!sessionId || !sanitizedTicketId || !getCollectionRef) return;
 
     setIsLoading(true);
     try {
         const sessionRef = doc(getCollectionRef, sessionId);
-        await updateDoc(sessionRef, { ticketId: newTicketId });
+        await updateDoc(sessionRef, { ticketId: sanitizedTicketId });
     } catch (error) {
         console.error("Error reallocating session:", error);
         setFirebaseError("Failed to reallocate session.");
@@ -860,7 +965,8 @@ const App = () => {
   }, [getCollectionRef]);
 
   const handleUpdateTicketId = useCallback(async (oldTicketId, newTicketId) => {
-    if (!newTicketId || oldTicketId === newTicketId || !getCollectionRef || !getTicketStatusCollectionRef) {
+    const sanitizedNewTicketId = sanitizeTicketId(newTicketId);
+    if (!sanitizedNewTicketId || oldTicketId === sanitizedNewTicketId || !getCollectionRef || !getTicketStatusCollectionRef) {
       setEditingTicketId(null);
       return;
     }
@@ -873,14 +979,14 @@ const App = () => {
       const sessionsQuery = query(getCollectionRef, where("ticketId", "==", oldTicketId));
       const sessionSnapshots = await getDocs(sessionsQuery);
       sessionSnapshots.forEach((doc) => {
-        batch.update(doc.ref, { ticketId: newTicketId });
+        batch.update(doc.ref, { ticketId: sanitizedNewTicketId });
       });
 
       // 2. Update the corresponding status document
       const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", oldTicketId));
       const statusSnapshots = await getDocs(statusQuery);
       statusSnapshots.forEach((doc) => {
-        batch.update(doc.ref, { ticketId: newTicketId });
+        batch.update(doc.ref, { ticketId: sanitizedNewTicketId });
       });
 
       await batch.commit();
@@ -1094,12 +1200,12 @@ ${combinedReport.trim()}
       const filename = `${reportName}-${today}.csv`;
       const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
       const csvRows = logsToExport.map(log => {
-        const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
+        // Use secure CSV escaping to prevent formula injection
         const formattedDuration = formatTime(log.accumulatedMs);
         const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
         const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
         const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
-        return [escape(log.ticketId), escape(formattedDuration), escape(log.note || ''), escape(startTime), escape(finishTime), escape(log.id), escape(log.status), escape(submissionDate)].join(',');
+        return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
       });
 
       const csvContent = [headers.join(','), ...csvRows].join('\n');
@@ -1201,6 +1307,16 @@ ${combinedReport.trim()}
   const isStopButtonDisabled = !isTimerRunning && !isTimerPaused;
   const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
 
+  // --- Update refs for keyboard handler optimization ---
+  useEffect(() => {
+    actionHandlerRef.current = actionHandler;
+    isButtonDisabledRef.current = isButtonDisabled;
+    isStopButtonDisabledRef.current = isStopButtonDisabled;
+    stopTimerRef.current = stopTimer;
+    editingTicketIdRef.current = editingTicketId;
+  });
+
+  // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
   useEffect(() => {
     const handleKeyDown = (event) => {
       const activeTag = document.activeElement.tagName;
@@ -1208,28 +1324,28 @@ ${combinedReport.trim()}
       // Ctrl/Cmd + Space: Global timer toggle (works even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
-        if (actionHandler && !isButtonDisabled) {
-          actionHandler();
+        if (actionHandlerRef.current && !isButtonDisabledRef.current) {
+          actionHandlerRef.current();
         }
         return;
       }
 
       if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
         event.preventDefault();
-        if (!isStopButtonDisabled) {
-          stopTimer(false);
+        if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
+          stopTimerRef.current(false);
         }
         return; 
       }
       
       if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0') || editingTicketId) {
+        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0') || editingTicketIdRef.current) {
           return;
         }
 
         event.preventDefault();
-        if (actionHandler && !isButtonDisabled) {
-          actionHandler();
+        if (actionHandlerRef.current && !isButtonDisabledRef.current) {
+          actionHandlerRef.current();
         }
       }
     };
@@ -1237,7 +1353,7 @@ ${combinedReport.trim()}
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [actionHandler, isButtonDisabled, isStopButtonDisabled, stopTimer, editingTicketId]);
+  }, []); // Empty dependency array - handler registered only once
 
 
   // --- Render Logic ---
@@ -1701,7 +1817,14 @@ ${combinedReport.trim()}
   );
 };
 
-export default App;
+// Wrap App with Error Boundary for graceful error handling
+const AppWithErrorBoundary = () => (
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+
+export default AppWithErrorBoundary;
 
 
 
