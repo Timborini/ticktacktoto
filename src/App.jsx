@@ -1092,7 +1092,7 @@ ${combinedReport.trim()}
     try {
       // CSV Export
       const filename = `${reportName}-${today}.csv`;
-      const headers = ["Ticket ID", "Duration (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
+      const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
       const csvRows = logsToExport.map(log => {
         const escape = (data) => `"${String(data).replace(/"/g, '""')}"`;
         const formattedDuration = formatTime(log.accumulatedMs);
@@ -1247,7 +1247,7 @@ ${combinedReport.trim()}
           <div>
               <p>Are you sure you want to delete this session for ticket <strong>{logToDelete.ticketId}</strong>?</p>
               <div className="mt-4 text-sm bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  <p><strong>Duration:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
+                  <p><strong>Time Worked:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
                   {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
               </div>
           </div>
