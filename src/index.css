@@ -16,6 +16,36 @@
   }
 }
 
+/* Accessibility: Focus visible styles for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Prevent double zoom on tap for timer display */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Ensure minimum touch targets on mobile */
+@media (max-width: 768px) {
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+  }
+}
+
 ::selection {
   background-color: #4f46e5;
   color: white;
