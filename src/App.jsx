@@ -2277,179 +2277,196 @@ ${combinedReport.trim()}
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
             
-            {/* Search Input */}
-            <div className="mb-4 max-w-2xl">
-                <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Search Tickets
-                </label>
-                <div className="relative">
-                    <input
-                        type="search"
-                        id="search-filter"
-                        placeholder="Search by ticket ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full p-2 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Quick Date Filters */}
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Quick Filters
-                </label>
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
-                            setDateRangeStart(today);
-                            setDateRangeEnd(today);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Today
-                    </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(weekAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 7 Days
-                    </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(monthAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 30 Days
-                    </button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
-                <div>
-                    <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="All">All Unsubmitted</option>
-                        <option value="Open">Open</option>
-                        <option value="Closed">Closed</option>
-                        <option value="Submitted">Submitted</option>
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-                    <input 
-                        type="date" 
-                        id="date-start" 
-                        value={dateRangeStart} 
-                        onChange={(e) => {
-                            setDateRangeStart(e.target.value);
-                            setDateFilter('');
-                        }} 
-                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-                    <input 
-                        type="date" 
-                        id="date-end" 
-                        value={dateRangeEnd} 
-                        onChange={(e) => {
-                            setDateRangeEnd(e.target.value);
-                            setDateFilter('');
-                        }} 
-                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <button 
-                    onClick={() => { 
-                        setStatusFilter('All'); 
-                        setDateFilter(''); 
-                        setDateRangeStart(''); 
-                        setDateRangeEnd(''); 
-                        setSearchQuery(''); 
-                    }} 
-                    className="w-full sm:w-auto px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                >
-                     Clear All Filters
-                 </button>
-            </div>
-            {/* Statistics Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                {/* Total Time Card */}
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-4 rounded-lg shadow-md border border-indigo-200 dark:border-indigo-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
-                        <Clock className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* LEFT COLUMN - Filters */}
+                <div className="space-y-6">
+                    {/* Search Bar */}
+                    <div>
+                        <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Search Tickets
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="search"
+                                id="search-filter"
+                                placeholder="Search by ticket ID..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full p-3 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold font-mono text-indigo-900 dark:text-indigo-100">{formatTime(totalFilteredTimeMs)}</p>
-                    {filteredAndGroupedLogs.length > 0 && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                            {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+
+                    {/* Quick Date Filters */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            Quick Filters
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => {
+                                    const today = new Date().toISOString().split('T')[0];
+                                    setDateRangeStart(today);
+                                    setDateRangeEnd(today);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Today
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const today = new Date();
+                                    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                                    setDateRangeStart(weekAgo.toISOString().split('T')[0]);
+                                    setDateRangeEnd(today.toISOString().split('T')[0]);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Last 7 Days
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const today = new Date();
+                                    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                                    setDateRangeStart(monthAgo.toISOString().split('T')[0]);
+                                    setDateRangeEnd(today.toISOString().split('T')[0]);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Last 30 Days
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                        <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Status Filter
+                        </label>
+                        <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="All">All Unsubmitted</option>
+                            <option value="Open">Open</option>
+                            <option value="Closed">Closed</option>
+                            <option value="Submitted">Submitted</option>
+                        </select>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Start Date
+                            </label>
+                            <input 
+                                type="date" 
+                                id="date-start" 
+                                value={dateRangeStart} 
+                                onChange={(e) => {
+                                    setDateRangeStart(e.target.value);
+                                    setDateFilter('');
+                                }} 
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                End Date
+                            </label>
+                            <input 
+                                type="date" 
+                                id="date-end" 
+                                value={dateRangeEnd} 
+                                onChange={(e) => {
+                                    setDateRangeEnd(e.target.value);
+                                    setDateFilter('');
+                                }} 
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT COLUMN - Statistics */}
+                <div className="space-y-6">
+                    {/* Total Time - Prominent Display */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-6 rounded-xl shadow-md border border-indigo-200 dark:border-indigo-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
+                            <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
+                        </div>
+                        <p className="text-4xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mb-2">{formatTime(totalFilteredTimeMs)}</p>
+                        {filteredAndGroupedLogs.length > 0 && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Status Breakdown */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
+                            <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
+                                <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                    {logs.filter(l => l.status === 'submitted').length}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
+                                <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                                    {logs.filter(l => l.status !== 'submitted').length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Average Session Time */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
+                            <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                        </div>
+                        <p className="text-2xl font-bold font-mono text-purple-900 dark:text-purple-100">
+                            {logs.length > 0 
+                                ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
+                                : '00:00:00'
+                            }
                         </p>
-                    )}
-                </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Per session across all time
+                        </p>
+                    </div>
 
-                {/* Submitted vs Unsubmitted Card */}
-                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
-                        <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
-                    </div>
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
-                            <span className="text-lg font-bold text-green-700 dark:text-green-300">
-                                {logs.filter(l => l.status === 'submitted').length}
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
-                            <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                                {logs.filter(l => l.status !== 'submitted').length}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Average Session Time Card */}
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
-                        <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
-                    </div>
-                    <p className="text-3xl font-bold font-mono text-purple-900 dark:text-purple-100">
-                        {logs.length > 0 
-                            ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
-                            : '00:00:00'
-                        }
-                    </p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                        Per session across all time
-                    </p>
+                    {/* Clear All Filters Button */}
+                    <button 
+                        onClick={() => { 
+                            setStatusFilter('All'); 
+                            setDateFilter(''); 
+                            setDateRangeStart(''); 
+                            setDateRangeEnd(''); 
+                            setSearchQuery(''); 
+                        }} 
+                        className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        Clear All Filters
+                    </button>
                 </div>
             </div>
         </section>
