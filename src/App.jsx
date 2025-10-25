@@ -1143,7 +1143,11 @@ const App = () => {
   // --- Core Timer Functions ---
 
   const pauseTimer = useCallback(async () => {
-    if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) return;
+    console.log('⏸️ pauseTimer called', { runningLogDocId, isTimerRunning, hasCollectionRef: !!getCollectionRef, hasActiveLogData: !!activeLogData });
+    if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
+      console.log('⚠️ pauseTimer blocked - missing requirements');
+      return;
+    }
 
     setIsLoading(true);
     const stopTime = Date.now();
@@ -1226,8 +1230,15 @@ const App = () => {
   }, [getCollectionRef]);
 
   const startOrResumeTimer = useCallback(async () => {
-    if (!getCollectionRef || currentTicketId.trim() === '') return;
-    if (isTimerRunning) return;
+    console.log('▶️ startOrResumeTimer called', { hasCollectionRef: !!getCollectionRef, ticketId: currentTicketId, isTimerRunning });
+    if (!getCollectionRef || currentTicketId.trim() === '') {
+      console.log('⚠️ startOrResumeTimer blocked - missing requirements');
+      return;
+    }
+    if (isTimerRunning) {
+      console.log('⚠️ startOrResumeTimer blocked - timer already running');
+      return;
+    }
 
     setIsLoading(true);
     const startTimestamp = Date.now();
@@ -1251,8 +1262,12 @@ const App = () => {
   }, [getCollectionRef, currentTicketId, isTimerRunning, isTimerPaused, runningLogDocId, startNewSession, currentNote]);
 
   const startNewOrOverride = useCallback(async (ticketId) => {
+    console.log('🚀 startNewOrOverride called', { ticketId, currentTicketId, hasCollectionRef: !!getCollectionRef });
     const finalTicketId = ticketId || currentTicketId;
-    if (!getCollectionRef || finalTicketId.trim() === '') return;
+    if (!getCollectionRef || finalTicketId.trim() === '') {
+      console.log('⚠️ startNewOrOverride blocked - missing requirements');
+      return;
+    }
     
     if (ticketStatuses[finalTicketId]?.isClosed) {
         return; 
@@ -1846,6 +1861,12 @@ ${combinedReport.trim()}
     isStopButtonDisabledRef.current = isStopButtonDisabled;
     stopTimerRef.current = stopTimer;
     editingTicketIdRef.current = editingTicketId;
+    console.log('🔄 Refs updated:', { 
+      hasActionHandler: !!actionHandler, 
+      isButtonDisabled, 
+      actionButtonText,
+      isStopButtonDisabled 
+    });
   });
 
   // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
