@@ -2180,24 +2180,28 @@ ${combinedReport.trim()}
               <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
-          {(isTimerRunning || isTimerPaused) && (
-            <div className="mb-4">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
-                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {currentNote.length}/5000
-                  </span>
-                </div>
-                <textarea
-                    placeholder="E.g., Fixed critical bug in user authentication module."
-                    value={currentNote}
-                    onChange={(e) => setCurrentNote(e.target.value)}
-                    maxLength={5000}
-                    rows="4"
-                    className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
-                />
+          <div 
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              (isTimerRunning || isTimerPaused) 
+                ? 'max-h-48 opacity-100 mb-4' 
+                : 'max-h-0 opacity-0 mb-0'
+            }`}
+          >
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
+              <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                {currentNote.length}/5000
+              </span>
             </div>
-          )}
+            <textarea
+              placeholder="E.g., Fixed critical bug in user authentication module."
+              value={currentNote}
+              onChange={(e) => setCurrentNote(e.target.value)}
+              maxLength={5000}
+              rows="4"
+              className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+            />
+          </div>
 
           <div 
             className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
