@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw, ChevronLeft
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -577,6 +577,7 @@ const App = () => {
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
+  const [exportFormat, setExportFormat] = useState(''); // Track selected format: '' | 'csv' | 'json'
   const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
   const [pendingExport, setPendingExport] = useState(null); // Store export details for pre-confirmation
   const [recentTicketIds, setRecentTicketIds] = useState([]);
@@ -711,13 +712,12 @@ const App = () => {
 
   // --- Firebase Initialization and Authentication ---
   useEffect(() => {
-    console.log('🔵 Firebase initialization starting...');
     let authCompleted = false;
     
     // Set a timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
       if (!authCompleted) {
-        console.error('🔴 Firebase initialization timeout - forcing error state');
+        console.error('Firebase initialization timeout');
         setFirebaseError('Connection timeout. Please check your internet connection and refresh the page.');
         setIsLoading(false);
         setIsAuthReady(true); // Force auth ready to exit loading screen
@@ -727,7 +727,7 @@ const App = () => {
 
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.error('🔴 Firebase config missing or invalid');
+        console.error('Firebase config missing or invalid');
         setFirebaseError('Firebase configuration is missing or invalid. Please replace the placeholder values in your firebaseConfig object.');
         setIsLoading(false);
         setIsAuthReady(true);
@@ -736,34 +736,29 @@ const App = () => {
         return;
       }
 
-      console.log('🔵 Initializing Firebase app...');
       const app = initializeApp(firebaseConfig);
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
 
-      console.log('🔵 Firebase app initialized, setting up auth listener...');
       setDb(firestore);
       setAuth(userAuth);
 
       const unsubscribe = onAuthStateChanged(userAuth, (user) => {
         if (user) {
           authCompleted = true;
-          console.log('✅ User authenticated:', user.uid);
           setUser(user);
           setUserId(user.uid);
           setIsAuthReady(true);
           clearTimeout(loadingTimeout);
         } else {
-          console.log('🔵 No user found, signing in anonymously...');
           // If no user, sign in anonymously to allow app usage
           signInAnonymously(userAuth)
             .then(() => {
-              console.log('✅ Anonymous sign-in initiated');
               // Auth state will be updated by onAuthStateChanged
             })
             .catch(err => {
               authCompleted = true;
-              console.error('🔴 Anonymous sign-in error:', err);
+              console.error('Anonymous sign-in error:', err);
               setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
               setIsLoading(false);
               setIsAuthReady(true);
@@ -999,6 +994,7 @@ const App = () => {
     const handleClickOutside = (event) => {
       if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
         setExportOption('');
+        setExportFormat('');
         setExportFocusIndex(0);
       }
     };
@@ -1014,42 +1010,52 @@ const App = () => {
     if (exportOption !== 'menu') return;
 
     const handleKeyDown = (e) => {
-      const exportOptions = [
-        { type: 'selected', format: 'csv' },
-        { type: 'selected', format: 'json' },
-        { type: 'filtered', format: 'csv' },
-        { type: 'filtered', format: 'json' },
-        { type: 'all', format: 'csv' },
-        { type: 'all', format: 'json' }
-      ];
+      // Dynamic options based on current step
+      const formatOptions = ['csv', 'json'];
+      const scopeOptions = ['selected', 'filtered', 'all'];
+      const currentOptions = exportFormat ? scopeOptions : formatOptions;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setExportFocusIndex((prev) => (prev + 1) % exportOptions.length);
+        setExportFocusIndex((prev) => (prev + 1) % currentOptions.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setExportFocusIndex((prev) => (prev - 1 + exportOptions.length) % exportOptions.length);
+        setExportFocusIndex((prev) => (prev - 1 + currentOptions.length) % currentOptions.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (handleExportRef.current) {
-          const selected = exportOptions[exportFocusIndex];
-          handleExportRef.current(selected.type, selected.format);
+        if (!exportFormat) {
+          // Step 1: Select format
+          setExportFormat(formatOptions[exportFocusIndex]);
+          setExportFocusIndex(0);
+        } else {
+          // Step 2: Select scope and export
+          if (handleExportRef.current) {
+            handleExportRef.current(scopeOptions[exportFocusIndex], exportFormat);
+          }
+          setExportOption('');
+          setExportFormat('');
+          setExportFocusIndex(0);
         }
-        setExportOption('');
-        setExportFocusIndex(0);
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        setExportOption('');
-        setExportFocusIndex(0);
-        if (exportButtonRef.current) {
-          exportButtonRef.current.focus();
+        if (exportFormat) {
+          // Go back to format selection
+          setExportFormat('');
+          setExportFocusIndex(0);
+        } else {
+          // Close dropdown
+          setExportOption('');
+          setExportFocusIndex(0);
+          if (exportButtonRef.current) {
+            exportButtonRef.current.focus();
+          }
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFocusIndex]);
+  }, [exportOption, exportFormat, exportFocusIndex]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1143,9 +1149,7 @@ const App = () => {
   // --- Core Timer Functions ---
 
   const pauseTimer = useCallback(async () => {
-    console.log('⏸️ pauseTimer called', { runningLogDocId, isTimerRunning, hasCollectionRef: !!getCollectionRef, hasActiveLogData: !!activeLogData });
     if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
-      console.log('⚠️ pauseTimer blocked - missing requirements');
       return;
     }
 
@@ -1230,13 +1234,10 @@ const App = () => {
   }, [getCollectionRef]);
 
   const startOrResumeTimer = useCallback(async () => {
-    console.log('▶️ startOrResumeTimer called', { hasCollectionRef: !!getCollectionRef, ticketId: currentTicketId, isTimerRunning });
     if (!getCollectionRef || currentTicketId.trim() === '') {
-      console.log('⚠️ startOrResumeTimer blocked - missing requirements');
       return;
     }
     if (isTimerRunning) {
-      console.log('⚠️ startOrResumeTimer blocked - timer already running');
       return;
     }
 
@@ -1262,10 +1263,8 @@ const App = () => {
   }, [getCollectionRef, currentTicketId, isTimerRunning, isTimerPaused, runningLogDocId, startNewSession, currentNote]);
 
   const startNewOrOverride = useCallback(async (ticketId) => {
-    console.log('🚀 startNewOrOverride called', { ticketId, currentTicketId, hasCollectionRef: !!getCollectionRef });
     const finalTicketId = ticketId || currentTicketId;
     if (!getCollectionRef || finalTicketId.trim() === '') {
-      console.log('⚠️ startNewOrOverride blocked - missing requirements');
       return;
     }
     
@@ -1861,12 +1860,6 @@ ${combinedReport.trim()}
     isStopButtonDisabledRef.current = isStopButtonDisabled;
     stopTimerRef.current = stopTimer;
     editingTicketIdRef.current = editingTicketId;
-    console.log('🔄 Refs updated:', { 
-      hasActionHandler: !!actionHandler, 
-      isButtonDisabled, 
-      actionButtonText,
-      isStopButtonDisabled 
-    });
   });
 
   // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
@@ -1877,30 +1870,20 @@ ${combinedReport.trim()}
       const hasModal = document.querySelector('.fixed.inset-0');
       const isEditing = editingTicketIdRef.current;
 
-      console.log('🎹 Key pressed:', event.key, { isTyping, hasModal: !!hasModal, isEditing, activeTag, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
-
       // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
-        console.log('✅ Ctrl+Space shortcut triggered!');
         event.preventDefault();
         if (actionHandlerRef.current && !isButtonDisabledRef.current) {
-          console.log('✅ Calling action handler');
           actionHandlerRef.current();
-        } else {
-          console.log('⚠️ Action disabled:', { hasHandler: !!actionHandlerRef.current, isDisabled: isButtonDisabledRef.current });
         }
         return;
       }
 
       // Shift+Space: Stop & Finalize (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing) {
-        console.log('✅ Shift+Space shortcut triggered!');
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
-          console.log('✅ Calling stop timer');
           stopTimerRef.current(false);
-        } else {
-          console.log('⚠️ Stop disabled:', { hasHandler: !!stopTimerRef.current, isDisabled: isStopButtonDisabledRef.current });
         }
         return;
       }
@@ -2520,7 +2503,15 @@ ${combinedReport.trim()}
                 <div className="relative export-dropdown">
                   <button
                     ref={exportButtonRef}
-                    onClick={() => setExportOption(exportOption ? '' : 'menu')}
+                    onClick={() => {
+                      if (exportOption) {
+                        setExportOption('');
+                        setExportFormat('');
+                        setExportFocusIndex(0);
+                      } else {
+                        setExportOption('menu');
+                      }
+                    }}
                     className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     aria-label="Export"
                     aria-expanded={exportOption === 'menu'}
@@ -2536,74 +2527,95 @@ ${combinedReport.trim()}
                       role="menu"
                       aria-label="Export options"
                     >
-                      {/* Section 1: Selected */}
-                      <div className="border-b border-gray-200 dark:border-gray-700">
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Selected
-                        </div>
-                        <button
-                          onClick={() => handleExport('selected', 'csv')}
-                          disabled={isActionDisabled}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📄 CSV
-                        </button>
-                        <button
-                          onClick={() => handleExport('selected', 'json')}
-                          disabled={isActionDisabled}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📋 JSON
-                        </button>
-                      </div>
-
-                      {/* Section 2: Filtered */}
-                      <div className="border-b border-gray-200 dark:border-gray-700">
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Filtered
-                        </div>
-                        <button
-                          onClick={() => handleExport('filtered', 'csv')}
-                          disabled={filteredAndGroupedLogs.length === 0}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📄 CSV
-                        </button>
-                        <button
-                          onClick={() => handleExport('filtered', 'json')}
-                          disabled={filteredAndGroupedLogs.length === 0}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 3 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📋 JSON
-                        </button>
-                      </div>
-
-                      {/* Section 3: All Data */}
-                      <div>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          All Data
-                        </div>
-                        <button
-                          onClick={() => handleExport('all', 'csv')}
-                          disabled={logs.length === 0}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 4 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📄 CSV
-                        </button>
-                        <button
-                          onClick={() => handleExport('all', 'json')}
-                          disabled={logs.length === 0}
-                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 5 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          📋 JSON
-                        </button>
-                      </div>
+                      {!exportFormat ? (
+                        /* Step 1: Choose Format */
+                        <>
+                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                            Choose Format
+                          </div>
+                          <button
+                            onClick={() => {
+                              setExportFormat('csv');
+                              setExportFocusIndex(0);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            <span className="text-xl">📄</span>
+                            <span className="font-medium">CSV</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setExportFormat('json');
+                              setExportFocusIndex(0);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            <span className="text-xl">📋</span>
+                            <span className="font-medium">JSON</span>
+                          </button>
+                        </>
+                      ) : (
+                        /* Step 2: Choose Scope */
+                        <>
+                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <span>Choose Scope</span>
+                            <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
+                              {exportFormat.toUpperCase()}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
+                          >
+                            <ChevronLeft className="h-3 w-3" />
+                            Back to format
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('selected', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={isActionDisabled}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            Selected
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('filtered', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={filteredAndGroupedLogs.length === 0}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            Filtered
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('all', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={logs.length === 0}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            All Data
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
