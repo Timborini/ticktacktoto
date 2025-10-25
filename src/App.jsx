@@ -2244,10 +2244,12 @@ ${combinedReport.trim()}
             </button>
             </div>
           </div>
-           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
-                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl + Space</span>: Start / Pause / Resume (works everywhere, even while typing!).</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Shift + Space</span>: Stop and finalize the current entry.</p>
+           <div className="max-w-2xl mx-auto">
+               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                    <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
+                    <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl + Space</span>: Start / Pause / Resume (works everywhere, even while typing!).</p>
+                    <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Shift + Space</span>: Stop and finalize the current entry.</p>
+               </div>
            </div>
         </section>
 
