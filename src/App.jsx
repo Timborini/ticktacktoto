@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw, ChevronLeft
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -383,10 +383,10 @@ const InstructionsContent = () => {
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
             <Section id="getting-started" icon={Clock} title="Getting Started">
                 <ul className="list-disc list-inside space-y-1.5">
-                    <li><strong>Start Timer:</strong> Enter ticket ID + 'START' or press <kbd className="kbd-key">Enter</kbd></li>
+                    <li><strong>Start Timer:</strong> Enter ticket ID + press <kbd className="kbd-key">Ctrl+Space</kbd> (works while typing!)</li>
                     <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
                     <li><strong>Notifications:</strong> Alerts at 30min, 1hr, 2hr, 4hr milestones</li>
-                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Enter</kbd> or click 'PAUSE'</li>
+                    <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Ctrl+Space</kbd> anytime, anywhere</li>
                 </ul>
             </Section>
 
@@ -419,11 +419,11 @@ const InstructionsContent = () => {
 
             <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div><kbd className="kbd-key">Enter</kbd> Start/Pause/Resume</div>
-                    <div><kbd className="kbd-key">Ctrl+Space</kbd> Timer (anywhere)</div>
-                    <div><kbd className="kbd-key">Alt+Enter</kbd> Stop timer</div>
+                    <div><kbd className="kbd-key">Ctrl+Space</kbd> Start/Pause (works everywhere)</div>
+                    <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize (works everywhere)</div>
                     <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
                     <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
+                    <div><kbd className="kbd-key">Enter</kbd> Submit forms</div>
                     <div><kbd className="kbd-key">Tab</kbd> Navigate UI</div>
                 </div>
             </Section>
@@ -577,7 +577,9 @@ const App = () => {
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
+  const [exportFormat, setExportFormat] = useState(''); // Track selected format: '' | 'csv' | 'json'
   const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
+  const [pendingExport, setPendingExport] = useState(null); // Store export details for pre-confirmation
   const [recentTicketIds, setRecentTicketIds] = useState([]);
 
   // --- Modal State ---
@@ -710,10 +712,27 @@ const App = () => {
 
   // --- Firebase Initialization and Authentication ---
   useEffect(() => {
+    let authCompleted = false;
+    
+    // Set a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+      if (!authCompleted) {
+        console.error('Firebase initialization timeout');
+        setFirebaseError('Connection timeout. Please check your internet connection and refresh the page.');
+        setIsLoading(false);
+        setIsAuthReady(true); // Force auth ready to exit loading screen
+        setHasLoadedOnce(true); // Force loaded flag to exit loading screen
+      }
+    }, 10000); // 10 second timeout
+
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+        console.error('Firebase config missing or invalid');
         setFirebaseError('Firebase configuration is missing or invalid. Please replace the placeholder values in your firebaseConfig object.');
         setIsLoading(false);
+        setIsAuthReady(true);
+        setHasLoadedOnce(true);
+        clearTimeout(loadingTimeout);
         return;
       }
 
@@ -721,29 +740,45 @@ const App = () => {
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
 
-
       setDb(firestore);
       setAuth(userAuth);
 
       const unsubscribe = onAuthStateChanged(userAuth, (user) => {
         if (user) {
+          authCompleted = true;
           setUser(user);
           setUserId(user.uid);
           setIsAuthReady(true);
+          clearTimeout(loadingTimeout);
         } else {
           // If no user, sign in anonymously to allow app usage
-          signInAnonymously(userAuth).catch(err => {
-            console.error('Anonymous sign-in error:', err);
-            setFirebaseError('Failed to sign in anonymously.');
-          });
+          signInAnonymously(userAuth)
+            .then(() => {
+              // Auth state will be updated by onAuthStateChanged
+            })
+            .catch(err => {
+              authCompleted = true;
+              console.error('Anonymous sign-in error:', err);
+              setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
+              setIsLoading(false);
+              setIsAuthReady(true);
+              setHasLoadedOnce(true);
+              clearTimeout(loadingTimeout);
+            });
         }
       });
 
-      return () => unsubscribe();
+      return () => {
+        unsubscribe();
+        clearTimeout(loadingTimeout);
+      };
     } catch (error) {
       console.error('Firebase initialization error:', error);
       setFirebaseError('Error initializing Firebase. See console.');
       setIsLoading(false);
+      setIsAuthReady(true);
+      setHasLoadedOnce(true);
+      clearTimeout(loadingTimeout);
     }
   }, []);
 
@@ -826,6 +861,17 @@ const App = () => {
 
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
+        
+        // Handle submissionDate - could be Firestore Timestamp or number
+        let submissionDate = null;
+        if (data.submissionDate) {
+          if (typeof data.submissionDate === 'number') {
+            submissionDate = data.submissionDate; // Already a number (ms since epoch)
+          } else if (data.submissionDate.toDate) {
+            submissionDate = data.submissionDate.toDate(); // Firestore Timestamp
+          }
+        }
+        
         const log = {
           id: doc.id,
           ticketId: data.ticketId || 'No Ticket ID',
@@ -834,7 +880,7 @@ const App = () => {
           accumulatedMs: data.accumulatedMs || 0,
           note: data.note || '',
           status: data.status || 'unsubmitted', // Add status field
-          submissionDate: data.submissionDate?.toDate() || null,
+          submissionDate: submissionDate,
           createdAt: data.createdAt || null // Track when session was originally created
         };
 
@@ -948,6 +994,7 @@ const App = () => {
     const handleClickOutside = (event) => {
       if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
         setExportOption('');
+        setExportFormat('');
         setExportFocusIndex(0);
       }
     };
@@ -963,34 +1010,52 @@ const App = () => {
     if (exportOption !== 'menu') return;
 
     const handleKeyDown = (e) => {
-      const exportOptions = ['selected', 'filtered', 'all'];
+      // Dynamic options based on current step
+      const formatOptions = ['csv', 'json'];
+      const scopeOptions = ['selected', 'filtered', 'all'];
+      const currentOptions = exportFormat ? scopeOptions : formatOptions;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setExportFocusIndex((prev) => (prev + 1) % exportOptions.length);
+        setExportFocusIndex((prev) => (prev + 1) % currentOptions.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setExportFocusIndex((prev) => (prev - 1 + exportOptions.length) % exportOptions.length);
+        setExportFocusIndex((prev) => (prev - 1 + currentOptions.length) % currentOptions.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (handleExportRef.current) {
-          handleExportRef.current(exportOptions[exportFocusIndex]);
+        if (!exportFormat) {
+          // Step 1: Select format
+          setExportFormat(formatOptions[exportFocusIndex]);
+          setExportFocusIndex(0);
+        } else {
+          // Step 2: Select scope and export
+          if (handleExportRef.current) {
+            handleExportRef.current(scopeOptions[exportFocusIndex], exportFormat);
+          }
+          setExportOption('');
+          setExportFormat('');
+          setExportFocusIndex(0);
         }
-        setExportOption('');
-        setExportFocusIndex(0);
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        setExportOption('');
-        setExportFocusIndex(0);
-        if (exportButtonRef.current) {
-          exportButtonRef.current.focus();
+        if (exportFormat) {
+          // Go back to format selection
+          setExportFormat('');
+          setExportFocusIndex(0);
+        } else {
+          // Close dropdown
+          setExportOption('');
+          setExportFocusIndex(0);
+          if (exportButtonRef.current) {
+            exportButtonRef.current.focus();
+          }
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFocusIndex]);
+  }, [exportOption, exportFormat, exportFocusIndex]);
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1084,7 +1149,9 @@ const App = () => {
   // --- Core Timer Functions ---
 
   const pauseTimer = useCallback(async () => {
-    if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) return;
+    if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
+      return;
+    }
 
     setIsLoading(true);
     const stopTime = Date.now();
@@ -1167,8 +1234,12 @@ const App = () => {
   }, [getCollectionRef]);
 
   const startOrResumeTimer = useCallback(async () => {
-    if (!getCollectionRef || currentTicketId.trim() === '') return;
-    if (isTimerRunning) return;
+    if (!getCollectionRef || currentTicketId.trim() === '') {
+      return;
+    }
+    if (isTimerRunning) {
+      return;
+    }
 
     setIsLoading(true);
     const startTimestamp = Date.now();
@@ -1193,7 +1264,9 @@ const App = () => {
 
   const startNewOrOverride = useCallback(async (ticketId) => {
     const finalTicketId = ticketId || currentTicketId;
-    if (!getCollectionRef || finalTicketId.trim() === '') return;
+    if (!getCollectionRef || finalTicketId.trim() === '') {
+      return;
+    }
     
     if (ticketStatuses[finalTicketId]?.isClosed) {
         return; 
@@ -1426,6 +1499,111 @@ const App = () => {
     }
 }, [selectedTickets, selectedSessions, exportedSessionIds, logs, getCollectionRef, db]);
 
+  // Helper function to perform the actual export
+  const performExport = useCallback((logsToExport, reportName, format) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      if (format === 'json') {
+        // JSON Export
+        const filename = `${reportName}-${today}.json`;
+        const jsonData = logsToExport.map(log => ({
+          ticketId: log.ticketId,
+          timeWorked: formatTime(log.accumulatedMs),
+          timeWorkedMs: log.accumulatedMs,
+          note: log.note || '',
+          startDateTime: log.createdAt ? new Date(log.createdAt).toISOString() : null,
+          finishedDateTime: log.endTime ? new Date(log.endTime).toISOString() : null,
+          sessionId: log.id,
+          status: log.status,
+          submissionDate: log.submissionDate ? new Date(log.submissionDate).toISOString() : null
+        }));
+
+        const jsonContent = JSON.stringify(jsonData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as JSON`);
+      } else {
+        // CSV Export
+        const filename = `${reportName}-${today}.csv`;
+        const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
+        const csvRows = logsToExport.map(log => {
+          // Use secure CSV escaping to prevent formula injection
+          const formattedDuration = formatTime(log.accumulatedMs);
+          const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
+          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
+          const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
+          return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${logsToExport.length} entries as CSV`);
+      }
+    } catch (error) {
+      console.error('Export Failed:', error);
+      setFirebaseError(`Export failed: ${error.message}`);
+      toast.error('Export failed');
+    }
+  }, []);
+
+  // Handler for export confirmation with three options
+  const handleConfirmExport = useCallback(async (markAsSubmitted) => {
+    if (!pendingExport || !getCollectionRef) {
+      setIsConfirmingSubmit(false);
+      setPendingExport(null);
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      if (markAsSubmitted) {
+        // Mark sessions as submitted
+        const batch = writeBatch(db);
+        exportedSessionIds.forEach(sessionId => {
+          const sessionRef = doc(getCollectionRef, sessionId);
+          batch.update(sessionRef, {
+            status: 'submitted',
+            submissionDate: Date.now()
+          });
+        });
+        await batch.commit();
+        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
+      }
+
+      // Now perform the export
+      performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
+      
+    } catch (error) {
+      console.error('Error:', error);
+      setFirebaseError('Failed to update submission status.');
+      toast.error('Failed to update status');
+    } finally {
+      setIsConfirmingSubmit(false);
+      setExportedSessionIds(new Set());
+      setPendingExport(null);
+      setIsLoading(false);
+    }
+  }, [pendingExport, exportedSessionIds, getCollectionRef, db, performExport]);
+
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
     selectedTickets.forEach(ticketId => {
@@ -1522,8 +1700,7 @@ ${combinedReport.trim()}
     setIsReportModalOpen(true);
   };
 
-
-  const handleExport = useCallback(async (exportType) => {
+  const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
 
     let logsToExport = [];
@@ -1575,45 +1752,27 @@ ${combinedReport.trim()}
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
-
-    try {
-      // CSV Export
-      const filename = `${reportName}-${today}.csv`;
-      const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
-      const csvRows = logsToExport.map(log => {
-        // Use secure CSV escaping to prevent formula injection
-        const formattedDuration = formatTime(log.accumulatedMs);
-        const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
-        const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-        const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
-        return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
+    // Check for unsubmitted items BEFORE exporting
+    const unsubmittedLogs = logsToExport.filter(log => log.status !== 'submitted');
+    if (unsubmittedLogs.length > 0 && statusFilter !== 'Submitted') {
+      // Store export details and show confirmation modal first
+      setPendingExport({
+        type: exportType,
+        format,
+        logs: logsToExport,
+        name: reportName,
+        unsubmittedCount: unsubmittedLogs.length
       });
-
-      const csvContent = [headers.join(','), ...csvRows].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      // Track exported session IDs and prompt for submission if not already submitted
-      const exportedIds = new Set(logsToExport.filter(log => log.status !== 'submitted').map(log => log.id));
-      if (exportedIds.size > 0 && statusFilter !== 'Submitted') {
-        setExportedSessionIds(exportedIds);
-        setIsConfirmingSubmit(true);
-      }
-    } catch (error) {
-      console.error('Export Failed:', error);
-      setFirebaseError(`Export failed: ${error.message}`);
-    } finally {
+      setExportedSessionIds(new Set(unsubmittedLogs.map(log => log.id)));
+      setIsConfirmingSubmit(true);
       setExportOption('');
+      return; // Exit - actual export happens after user confirms
     }
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
+
+    // All items already submitted or no check needed - export immediately
+    performExport(logsToExport, reportName, format);
+    setExportOption('');
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter, performExport]);
 
   // Update handleExportRef for keyboard navigation
   useEffect(() => {
@@ -1706,10 +1865,11 @@ ${combinedReport.trim()}
   // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
   useEffect(() => {
     const handleKeyDown = (event) => {
-      const activeTag = document.activeElement.tagName;
+      const hasModal = document.querySelector('.fixed.inset-0');
+      const isEditing = editingTicketIdRef.current;
 
-      // Ctrl/Cmd + Space: Global timer toggle (works even in text fields)
-      if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
+      // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
+      if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
         event.preventDefault();
         if (actionHandlerRef.current && !isButtonDisabledRef.current) {
           actionHandlerRef.current();
@@ -1717,23 +1877,19 @@ ${combinedReport.trim()}
         return;
       }
 
-      if (event.key === 'Enter' && (event.altKey || event.metaKey)) {
+      // Shift+Space: Stop & Finalize (works EVERYWHERE, even in text fields)
+      if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing) {
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
           stopTimerRef.current(false);
         }
-        return; 
+        return;
       }
-      
-      if (event.key === 'Enter') {
-        if (activeTag === 'TEXTAREA' || activeTag === 'INPUT' || activeTag === 'BUTTON' || document.querySelector('.fixed.inset-0') || editingTicketIdRef.current) {
-          return;
-        }
 
-        event.preventDefault();
-        if (actionHandlerRef.current && !isButtonDisabledRef.current) {
-          actionHandlerRef.current();
-        }
+      // Enter: Only works normally in inputs/modals (for form submission)
+      if (event.key === 'Enter') {
+        // Let Enter work normally in inputs, textareas, buttons, and modals
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1814,20 +1970,76 @@ ${combinedReport.trim()}
         onCancel={handleCancelDelete}
         confirmText="Delete"
       />
-      <ConfirmationModal
-        isOpen={isConfirmingSubmit}
-        title="Mark as Submitted?"
-        message={exportedSessionIds.size > 0 
-          ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
-          : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
-        }
-        onConfirm={handleMarkAsSubmitted}
-        onCancel={() => {
-          setIsConfirmingSubmit(false);
-          setExportedSessionIds(new Set());
-        }}
-        confirmText="Mark as Submitted"
-      />
+      {/* Export Confirmation Modal with three options */}
+      {isConfirmingSubmit && pendingExport ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-confirm-title"
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="export-confirm-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+              Export Time Entries
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              You're about to export <strong>{pendingExport.logs.length} session(s)</strong>, 
+              including <strong>{pendingExport.unsubmittedCount} unsubmitted</strong>.
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Would you like to mark them as submitted?
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => handleConfirmExport(true)}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Export & Mark Submitted
+              </button>
+              
+              <button
+                onClick={() => handleConfirmExport(false)}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Only
+              </button>
+              
+              <button
+                onClick={() => {
+                  setIsConfirmingSubmit(false);
+                  setPendingExport(null);
+                  setExportedSessionIds(new Set());
+                }}
+                disabled={isLoading}
+                className="w-full px-4 py-2 min-h-[44px] text-gray-600 dark:text-gray-400 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ConfirmationModal
+          isOpen={isConfirmingSubmit}
+          title="Mark as Submitted?"
+          message={exportedSessionIds.size > 0 
+            ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
+            : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
+          }
+          onConfirm={handleMarkAsSubmitted}
+          onCancel={() => {
+            setIsConfirmingSubmit(false);
+            setExportedSessionIds(new Set());
+          }}
+          confirmText="Mark as Submitted"
+        />
+      )}
       <ReportModal
           isOpen={isReportModalOpen}
           onClose={() => {
@@ -1847,7 +2059,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl lg:max-w-2xl xl:max-w-4xl mx-auto py-8">
+      <div className="max-w-xl lg:max-w-3xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -1968,24 +2180,28 @@ ${combinedReport.trim()}
               <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
           )}
           
-          {(isTimerRunning || isTimerPaused) && (
-            <div className="mb-4">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
-                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {currentNote.length}/5000
-                  </span>
-                </div>
-                <textarea
-                    placeholder="E.g., Fixed critical bug in user authentication module."
-                    value={currentNote}
-                    onChange={(e) => setCurrentNote(e.target.value)}
-                    maxLength={5000}
-                    rows="4"
-                    className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
-                />
+          <div 
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              (isTimerRunning || isTimerPaused) 
+                ? 'max-h-48 opacity-100 mb-4' 
+                : 'max-h-0 opacity-0 mb-0'
+            }`}
+          >
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
+              <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                {currentNote.length}/5000
+              </span>
             </div>
-          )}
+            <textarea
+              placeholder="E.g., Fixed critical bug in user authentication module."
+              value={currentNote}
+              onChange={(e) => setCurrentNote(e.target.value)}
+              maxLength={5000}
+              rows="4"
+              className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+            />
+          </div>
 
           <div 
             className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
@@ -2022,9 +2238,8 @@ ${combinedReport.trim()}
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
                 <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
-                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Enter</span> (when not typing): Start / Pause / Resume timer.</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl/Cmd + Space</span>: Start / Pause / Resume timer (works everywhere).</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Alt/Cmd + Enter</span>: Stop and finalize the current entry.</p>
+                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl + Space</span>: Start / Pause / Resume (works everywhere, even while typing!).</p>
+                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Shift + Space</span>: Stop and finalize the current entry.</p>
            </div>
         </section>
 
@@ -2290,7 +2505,15 @@ ${combinedReport.trim()}
                 <div className="relative export-dropdown">
                   <button
                     ref={exportButtonRef}
-                    onClick={() => setExportOption(exportOption ? '' : 'menu')}
+                    onClick={() => {
+                      if (exportOption) {
+                        setExportOption('');
+                        setExportFormat('');
+                        setExportFocusIndex(0);
+                      } else {
+                        setExportOption('menu');
+                      }
+                    }}
                     className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     aria-label="Export"
                     aria-expanded={exportOption === 'menu'}
@@ -2302,34 +2525,99 @@ ${combinedReport.trim()}
                   {exportOption === 'menu' && (
                     <div 
                       ref={exportMenuRef}
-                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[160px]"
+                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
                       role="menu"
                       aria-label="Export options"
                     >
-                      <button
-                        onClick={() => handleExport('selected')}
-                        disabled={isActionDisabled}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-t-lg ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export Selected
-                      </button>
-                      <button
-                        onClick={() => handleExport('filtered')}
-                        disabled={filteredAndGroupedLogs.length === 0}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export Filtered
-                      </button>
-                      <button
-                        onClick={() => handleExport('all')}
-                        disabled={logs.length === 0}
-                        className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                        role="menuitem"
-                      >
-                        Export All
-                      </button>
+                      {!exportFormat ? (
+                        /* Step 1: Choose Format */
+                        <>
+                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                            Choose Format
+                          </div>
+                          <button
+                            onClick={() => {
+                              setExportFormat('csv');
+                              setExportFocusIndex(0);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            <span className="text-xl">📄</span>
+                            <span className="font-medium">CSV</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setExportFormat('json');
+                              setExportFocusIndex(0);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            <span className="text-xl">📋</span>
+                            <span className="font-medium">JSON</span>
+                          </button>
+                        </>
+                      ) : (
+                        /* Step 2: Choose Scope */
+                        <>
+                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <span>Choose Scope</span>
+                            <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
+                              {exportFormat.toUpperCase()}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
+                          >
+                            <ChevronLeft className="h-3 w-3" />
+                            Back to format
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('selected', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={isActionDisabled}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            Selected
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('filtered', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={filteredAndGroupedLogs.length === 0}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            Filtered
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport('all', exportFormat);
+                              setExportOption('');
+                              setExportFormat('');
+                              setExportFocusIndex(0);
+                            }}
+                            disabled={logs.length === 0}
+                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                            role="menuitem"
+                          >
+                            All Data
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
