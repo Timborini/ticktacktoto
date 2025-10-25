@@ -1856,20 +1856,30 @@ ${combinedReport.trim()}
       const hasModal = document.querySelector('.fixed.inset-0');
       const isEditing = editingTicketIdRef.current;
 
+      console.log('🎹 Key pressed:', event.key, { isTyping, hasModal: !!hasModal, isEditing, activeTag });
+
       // Space: Start/Pause/Resume (when not typing)
       if (event.key === ' ' && !isTyping && !hasModal && !isEditing) {
+        console.log('✅ Space shortcut triggered!');
         event.preventDefault();
         if (actionHandlerRef.current && !isButtonDisabledRef.current) {
+          console.log('✅ Calling action handler');
           actionHandlerRef.current();
+        } else {
+          console.log('⚠️ Action disabled:', { hasHandler: !!actionHandlerRef.current, isDisabled: isButtonDisabledRef.current });
         }
         return;
       }
 
       // Shift+Space: Stop & Finalize (works anywhere except in text fields)
       if (event.key === ' ' && event.shiftKey && !isTyping) {
+        console.log('✅ Shift+Space shortcut triggered!');
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
+          console.log('✅ Calling stop timer');
           stopTimerRef.current(false);
+        } else {
+          console.log('⚠️ Stop disabled:', { hasHandler: !!stopTimerRef.current, isDisabled: isStopButtonDisabledRef.current });
         }
         return;
       }
