@@ -1865,8 +1865,6 @@ ${combinedReport.trim()}
   // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
   useEffect(() => {
     const handleKeyDown = (event) => {
-      const activeTag = document.activeElement.tagName;
-      const isTyping = activeTag === 'TEXTAREA' || activeTag === 'INPUT';
       const hasModal = document.querySelector('.fixed.inset-0');
       const isEditing = editingTicketIdRef.current;
 
