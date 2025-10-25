@@ -711,51 +711,63 @@ const App = () => {
 
   // --- Firebase Initialization and Authentication ---
   useEffect(() => {
+    console.log('🔵 Firebase initialization starting...');
     let authCompleted = false;
     
     // Set a timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
       if (!authCompleted) {
-        console.error('Firebase initialization timeout');
+        console.error('🔴 Firebase initialization timeout - forcing error state');
         setFirebaseError('Connection timeout. Please check your internet connection and refresh the page.');
         setIsLoading(false);
+        setIsAuthReady(true); // Force auth ready to exit loading screen
+        setHasLoadedOnce(true); // Force loaded flag to exit loading screen
       }
     }, 10000); // 10 second timeout
 
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+        console.error('🔴 Firebase config missing or invalid');
         setFirebaseError('Firebase configuration is missing or invalid. Please replace the placeholder values in your firebaseConfig object.');
         setIsLoading(false);
+        setIsAuthReady(true);
+        setHasLoadedOnce(true);
         clearTimeout(loadingTimeout);
         return;
       }
 
+      console.log('🔵 Initializing Firebase app...');
       const app = initializeApp(firebaseConfig);
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
 
-
+      console.log('🔵 Firebase app initialized, setting up auth listener...');
       setDb(firestore);
       setAuth(userAuth);
 
       const unsubscribe = onAuthStateChanged(userAuth, (user) => {
         if (user) {
           authCompleted = true;
+          console.log('✅ User authenticated:', user.uid);
           setUser(user);
           setUserId(user.uid);
           setIsAuthReady(true);
           clearTimeout(loadingTimeout);
         } else {
+          console.log('🔵 No user found, signing in anonymously...');
           // If no user, sign in anonymously to allow app usage
           signInAnonymously(userAuth)
             .then(() => {
+              console.log('✅ Anonymous sign-in initiated');
               // Auth state will be updated by onAuthStateChanged
             })
             .catch(err => {
               authCompleted = true;
-              console.error('Anonymous sign-in error:', err);
+              console.error('🔴 Anonymous sign-in error:', err);
               setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
               setIsLoading(false);
+              setIsAuthReady(true);
+              setHasLoadedOnce(true);
               clearTimeout(loadingTimeout);
             });
         }
@@ -769,6 +781,8 @@ const App = () => {
       console.error('Firebase initialization error:', error);
       setFirebaseError('Error initializing Firebase. See console.');
       setIsLoading(false);
+      setIsAuthReady(true);
+      setHasLoadedOnce(true);
       clearTimeout(loadingTimeout);
     }
   }, []);
