@@ -866,6 +866,17 @@ const App = () => {
 
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
+        
+        // Handle submissionDate - could be Firestore Timestamp or number
+        let submissionDate = null;
+        if (data.submissionDate) {
+          if (typeof data.submissionDate === 'number') {
+            submissionDate = data.submissionDate; // Already a number (ms since epoch)
+          } else if (data.submissionDate.toDate) {
+            submissionDate = data.submissionDate.toDate(); // Firestore Timestamp
+          }
+        }
+        
         const log = {
           id: doc.id,
           ticketId: data.ticketId || 'No Ticket ID',
@@ -874,7 +885,7 @@ const App = () => {
           accumulatedMs: data.accumulatedMs || 0,
           note: data.note || '',
           status: data.status || 'unsubmitted', // Add status field
-          submissionDate: data.submissionDate?.toDate() || null,
+          submissionDate: submissionDate,
           createdAt: data.createdAt || null // Track when session was originally created
         };
 
