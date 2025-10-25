@@ -2059,7 +2059,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl lg:max-w-3xl mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -2153,77 +2153,84 @@ ${combinedReport.trim()}
             <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
           </div>
 
-          <div className="relative mb-1">
-            <input
-              type="text"
-              list="recent-tickets"
-              placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
-              value={currentTicketId}
-              onChange={(e) => setCurrentTicketId(e.target.value)}
-              disabled={isInputDisabled}
-              maxLength={200}
-              className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
-            />
-            <datalist id="recent-tickets">
-              {recentTicketIds.map(id => (
-                <option key={id} value={id} />
-              ))}
-            </datalist>
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-              {currentTicketId.length}/200
-            </span>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            e.g., PROJ-123, JIRA-456, or any custom format
-          </p>
-          {isInputTicketClosed && (
-              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
-          )}
-          
-          <div 
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${
-              (isTimerRunning || isTimerPaused) 
-                ? 'max-h-48 opacity-100 mb-4' 
-                : 'max-h-0 opacity-0 mb-0'
-            }`}
-          >
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
-              <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                {currentNote.length}/5000
+          <div className="max-w-2xl mx-auto">
+            <div className="relative mb-1">
+              <input
+                type="text"
+                list="recent-tickets"
+                placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
+                value={currentTicketId}
+                onChange={(e) => setCurrentTicketId(e.target.value)}
+                disabled={isInputDisabled}
+                maxLength={200}
+                className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
+              />
+              <datalist id="recent-tickets">
+                {recentTicketIds.map(id => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                {currentTicketId.length}/200
               </span>
             </div>
-            <textarea
-              placeholder="E.g., Fixed critical bug in user authentication module."
-              value={currentNote}
-              onChange={(e) => setCurrentNote(e.target.value)}
-              maxLength={5000}
-              rows="4"
-              className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
-            />
           </div>
-
-          <div 
-            className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">
-              <span className="sr-only">Timer: </span>
-              {formatTime(elapsedMs)}
+          <div className="max-w-2xl mx-auto">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              e.g., PROJ-123, JIRA-456, or any custom format
             </p>
-            {(isTimerRunning || isTimerPaused) && (
-                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
-                  {isTimerRunning ? 'Running' : 'Paused'}
-                </p>
+            {isInputTicketClosed && (
+                <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
             )}
+            
+            <div 
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                (isTimerRunning || isTimerPaused) 
+                  ? 'max-h-48 opacity-100 mb-4' 
+                  : 'max-h-0 opacity-0 mb-0'
+              }`}
+            >
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
+                <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {currentNote.length}/5000
+                </span>
+              </div>
+              <textarea
+                placeholder="E.g., Fixed critical bug in user authentication module."
+                value={currentNote}
+                onChange={(e) => setCurrentNote(e.target.value)}
+                maxLength={5000}
+                rows="4"
+                className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+              />
+            </div>
           </div>
 
-          <div className="flex space-x-3">
+          <div className="max-w-2xl mx-auto">
+            <div 
+              className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">
+                <span className="sr-only">Timer: </span>
+                {formatTime(elapsedMs)}
+              </p>
+              {(isTimerRunning || isTimerPaused) && (
+                  <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
+                    {isTimerRunning ? 'Running' : 'Paused'}
+                  </p>
+              )}
+            </div>
+          </div>
+
+          <div className="max-w-2xl mx-auto">
+            <div className="flex space-x-3">
             <button
               onClick={actionHandler}
               disabled={isButtonDisabled}
-              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span>
             </button>
@@ -2235,6 +2242,7 @@ ${combinedReport.trim()}
             >
               <Square className="h-6 w-6" />
             </button>
+            </div>
           </div>
            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
                 <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
@@ -2247,7 +2255,7 @@ ${combinedReport.trim()}
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
             
             {/* Search Input */}
-            <div className="mb-4">
+            <div className="mb-4 max-w-2xl">
                 <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Search Tickets
                 </label>
@@ -2315,7 +2323,7 @@ ${combinedReport.trim()}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
                 <div>
                     <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                     <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
