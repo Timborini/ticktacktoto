@@ -2883,7 +2883,7 @@ ${combinedReport.trim()}
                                 {formatTime(session.accumulatedMs)}
                               </span>
                               <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                               {session.note && (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
