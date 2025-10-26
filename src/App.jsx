@@ -25,7 +25,7 @@ const decodeIfBase64 = (value) => {
     if (!value) return value;
     const looksBase64 = /^[A-Za-z0-9+/=]+$/.test(value) && value.length >= 40;
     return looksBase64 ? atob(value) : value;
-  } catch (_) {
+  } catch {
     return value;
   }
 };
@@ -550,6 +550,8 @@ const App = () => {
   // --- Inline Editing State ---
   const [editingTicketId, setEditingTicketId] = useState(null);
   const [editingTicketValue, setEditingTicketValue] = useState('');
+  const [editingSessionNote, setEditingSessionNote] = useState(null);
+  const [editingSessionNoteValue, setEditingSessionNoteValue] = useState('');
 
   // --- Sharing State ---
   const [shareId, setShareId] = useState(null);
@@ -1456,6 +1458,28 @@ const App = () => {
     }
   }, [getCollectionRef, getTicketStatusCollectionRef, db]);
 
+  const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
+    const sanitizedNote = sanitizeNote(newNote);
+    if (!getCollectionRef) {
+      setEditingSessionNote(null);
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await updateDoc(doc(getCollectionRef, sessionId), {
+        note: sanitizedNote
+      });
+    } catch (error) {
+      console.error("Error updating session note:", error);
+      setFirebaseError("Failed to update session note. Please check the console.");
+    } finally {
+      setEditingSessionNote(null);
+      setEditingSessionNoteValue('');
+      setIsLoading(false);
+    }
+  }, [getCollectionRef]);
+
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
     
@@ -1866,7 +1890,7 @@ ${combinedReport.trim()}
   useEffect(() => {
     const handleKeyDown = (event) => {
       const hasModal = document.querySelector('.fixed.inset-0');
-      const isEditing = editingTicketIdRef.current;
+      const isEditing = editingTicketIdRef.current || editingSessionNote;
 
       // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
@@ -1896,7 +1920,7 @@ ${combinedReport.trim()}
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []); // Empty dependency array - handler registered only once
+  }, [editingSessionNote]); // Include editingSessionNote in dependencies
 
 
   // --- Render Logic ---
@@ -2059,7 +2083,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-xl lg:max-w-3xl mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -2126,297 +2150,353 @@ ${combinedReport.trim()}
           </div>
         </header>
 
-        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
-             <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-                <User className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400"/>
-                Your Profile
-            </h2>
-            <div>
-                <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Title / Role</label>
-                <input
-                    id="user-title"
-                    type="text"
-                    value={userTitle}
-                    onChange={(e) => setUserTitle(e.target.value)}
-                    placeholder="e.g., Senior Software Engineer"
-                    className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be used to personalize the AI-ready prompt for your status reports.</p>
-            </div>
-        </section>
-
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl mb-8 border-t-4 border-indigo-500">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
               {isTimerRunning ? 'Currently Running' : isTimerPaused ? 'Activity Paused' : 'Start New Session'}
             </h2>
             <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
           </div>
 
-          <div className="relative mb-1">
-            <input
-              type="text"
-              list="recent-tickets"
-              placeholder={'Enter Ticket ID (e.g., JIRA-101)'}
-              value={currentTicketId}
-              onChange={(e) => setCurrentTicketId(e.target.value)}
-              disabled={isInputDisabled}
-              maxLength={200}
-              className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
-            />
-            <datalist id="recent-tickets">
-              {recentTicketIds.map(id => (
-                <option key={id} value={id} />
-              ))}
-            </datalist>
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-              {currentTicketId.length}/200
-            </span>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            e.g., PROJ-123, JIRA-456, or any custom format
-          </p>
-          {isInputTicketClosed && (
-              <p className="text-red-500 text-sm mb-4 flex items-center"><Lock className="w-4 h-4 mr-1"/> This ticket is closed.</p>
-          )}
-          
-          <div 
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${
-              (isTimerRunning || isTimerPaused) 
-                ? 'max-h-48 opacity-100 mb-4' 
-                : 'max-h-0 opacity-0 mb-0'
-            }`}
-          >
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Session Notes (Saved on Pause/Stop)</label>
-              <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                {currentNote.length}/5000
-              </span>
-            </div>
-            <textarea
-              placeholder="E.g., Fixed critical bug in user authentication module."
-              value={currentNote}
-              onChange={(e) => setCurrentNote(e.target.value)}
-              maxLength={5000}
-              rows="4"
-              className="w-full p-2 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
-            />
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* LEFT COLUMN - Inputs & Configuration */}
+            <div className="space-y-6">
+              {/* Profile Title */}
+              <div>
+                <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <User className="h-4 w-4 inline mr-1"/>
+                  Your Title / Role
+                </label>
+                <input
+                  id="user-title"
+                  type="text"
+                  value={userTitle}
+                  onChange={(e) => setUserTitle(e.target.value)}
+                  placeholder="e.g., Senior Software Engineer"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used to personalize AI status reports</p>
+              </div>
 
-          <div 
-            className={`text-center py-4 rounded-xl mb-6 transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shadow-inner border border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shadow-inner border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'}`}
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            <p className="text-2xl sm:text-4xl font-mono font-bold tracking-wider">
-              <span className="sr-only">Timer: </span>
-              {formatTime(elapsedMs)}
-            </p>
-            {(isTimerRunning || isTimerPaused) && (
-                <p className={`text-sm mt-1 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
-                  {isTimerRunning ? 'Running' : 'Paused'}
+              {/* Ticket ID Input */}
+              <div>
+                <label htmlFor="ticket-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Ticket ID
+                </label>
+                <div className="relative">
+                  <input
+                    id="ticket-input"
+                    type="text"
+                    list="recent-tickets"
+                    placeholder="Enter Ticket ID (e.g., JIRA-101)"
+                    value={currentTicketId}
+                    onChange={(e) => setCurrentTicketId(e.target.value)}
+                    disabled={isInputDisabled}
+                    maxLength={200}
+                    className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
+                  />
+                  <datalist id="recent-tickets">
+                    {recentTicketIds.map(id => (
+                      <option key={id} value={id} />
+                    ))}
+                  </datalist>
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {currentTicketId.length}/200
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  e.g., PROJ-123, JIRA-456, or any custom format
                 </p>
-            )}
-          </div>
+                {isInputTicketClosed && (
+                  <p className="text-red-500 text-sm mt-2 flex items-center">
+                    <Lock className="w-4 h-4 mr-1"/> This ticket is closed.
+                  </p>
+                )}
+              </div>
 
-          <div className="flex space-x-3">
-            <button
-              onClick={actionHandler}
-              disabled={isButtonDisabled}
-              className={`flex-grow flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <ActionButtonIcon className="h-6 w-6" /><span>{actionButtonText}</span>
-            </button>
-            <button
-              onClick={() => stopTimer(false)}
-              disabled={isStopButtonDisabled}
-              title="Stop and Finalize Activity"
-              className={`flex-shrink-0 w-16 flex items-center justify-center py-4 px-3 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Square className="h-6 w-6" />
-            </button>
+              {/* Session Notes - Smooth show/hide with CSS transitions */}
+              <div 
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  (isTimerRunning || isTimerPaused) 
+                    ? 'max-h-48 opacity-100' 
+                    : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <label htmlFor="session-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Session Notes
+                  </label>
+                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {currentNote.length}/5000
+                  </span>
+                </div>
+                <textarea
+                  id="session-notes"
+                  placeholder="E.g., Fixed critical bug in user authentication module."
+                  value={currentNote}
+                  onChange={(e) => setCurrentNote(e.target.value)}
+                  maxLength={5000}
+                  rows="3"
+                  className="w-full p-3 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saved automatically on pause/stop</p>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN - Timer & Controls */}
+            <div className="space-y-6">
+              {/* Timer Display */}
+              <div className="text-center">
+                <div 
+                  className={`py-8 px-6 rounded-xl shadow-inner border transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600'}`}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <p className="text-3xl lg:text-4xl font-mono font-bold tracking-wider">
+                    <span className="sr-only">Timer: </span>
+                    {formatTime(elapsedMs)}
+                  </p>
+                  {(isTimerRunning || isTimerPaused) && (
+                    <p className={`text-sm mt-2 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
+                      {isTimerRunning ? 'Running' : 'Paused'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={actionHandler}
+                  disabled={isButtonDisabled}
+                  className={`w-full flex items-center justify-center space-x-2 py-4 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] ${actionStyle} ${isButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <ActionButtonIcon className="h-6 w-6" />
+                  <span>{actionButtonText}</span>
+                </button>
+                <button
+                  onClick={() => stopTimer(false)}
+                  disabled={isStopButtonDisabled}
+                  title="Stop and Finalize Activity"
+                  className={`w-full flex items-center justify-center space-x-2 py-3 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Square className="h-5 w-5" />
+                  <span>Stop & Finalize</span>
+                </button>
+              </div>
+
+              {/* Keyboard Shortcuts */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-3 text-sm">
+                  <Keyboard className="w-4 h-4 mr-2"/>
+                  Keyboard Shortcuts
+                </h3>
+                <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
+                  <p>
+                    <span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-2 py-1 rounded mr-2">Ctrl + Space</span>
+                    Start/Pause/Resume
+                  </p>
+                  <p>
+                    <span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-2 py-1 rounded mr-2">Shift + Space</span>
+                    Stop & Finalize
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-2"><Keyboard className="w-4 h-4 mr-2"/>Keyboard Shortcuts</h3>
-                <p><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Ctrl + Space</span>: Start / Pause / Resume (works everywhere, even while typing!).</p>
-                <p className="mt-1"><span className="font-mono bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">Shift + Space</span>: Stop and finalize the current entry.</p>
-           </div>
         </section>
 
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl mb-8">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 border-b border-gray-200 dark:border-gray-700 pb-2">Filter & Summary</h2>
             
-            {/* Search Input */}
-            <div className="mb-4">
-                <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Search Tickets
-                </label>
-                <div className="relative">
-                    <input
-                        type="search"
-                        id="search-filter"
-                        placeholder="Search by ticket ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full p-2 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Quick Date Filters */}
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Quick Filters
-                </label>
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
-                            setDateRangeStart(today);
-                            setDateRangeEnd(today);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Today
-                    </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(weekAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 7 Days
-                    </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(monthAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-3 py-1 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 30 Days
-                    </button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-end">
-                <div>
-                    <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                    <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="All">All Unsubmitted</option>
-                        <option value="Open">Open</option>
-                        <option value="Closed">Closed</option>
-                        <option value="Submitted">Submitted</option>
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-                    <input 
-                        type="date" 
-                        id="date-start" 
-                        value={dateRangeStart} 
-                        onChange={(e) => {
-                            setDateRangeStart(e.target.value);
-                            setDateFilter('');
-                        }} 
-                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-                    <input 
-                        type="date" 
-                        id="date-end" 
-                        value={dateRangeEnd} 
-                        onChange={(e) => {
-                            setDateRangeEnd(e.target.value);
-                            setDateFilter('');
-                        }} 
-                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <button 
-                    onClick={() => { 
-                        setStatusFilter('All'); 
-                        setDateFilter(''); 
-                        setDateRangeStart(''); 
-                        setDateRangeEnd(''); 
-                        setSearchQuery(''); 
-                    }} 
-                    className="w-full sm:w-auto px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                >
-                     Clear All Filters
-                 </button>
-            </div>
-            {/* Statistics Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                {/* Total Time Card */}
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-4 rounded-lg shadow-md border border-indigo-200 dark:border-indigo-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
-                        <Clock className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* LEFT COLUMN - Filters */}
+                <div className="space-y-6">
+                    {/* Search Bar */}
+                    <div>
+                        <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Search Tickets
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="search"
+                                id="search-filter"
+                                placeholder="Search by ticket ID..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full p-3 pl-3 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold font-mono text-indigo-900 dark:text-indigo-100">{formatTime(totalFilteredTimeMs)}</p>
-                    {filteredAndGroupedLogs.length > 0 && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                            {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+
+                    {/* Quick Date Filters */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            Quick Filters
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => {
+                                    const today = new Date().toISOString().split('T')[0];
+                                    setDateRangeStart(today);
+                                    setDateRangeEnd(today);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Today
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const today = new Date();
+                                    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                                    setDateRangeStart(weekAgo.toISOString().split('T')[0]);
+                                    setDateRangeEnd(today.toISOString().split('T')[0]);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Last 7 Days
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const today = new Date();
+                                    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                                    setDateRangeStart(monthAgo.toISOString().split('T')[0]);
+                                    setDateRangeEnd(today.toISOString().split('T')[0]);
+                                    setDateFilter('');
+                                }}
+                                className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                            >
+                                Last 30 Days
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                        <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Status Filter
+                        </label>
+                        <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="All">All Unsubmitted</option>
+                            <option value="Open">Open</option>
+                            <option value="Closed">Closed</option>
+                            <option value="Submitted">Submitted</option>
+                        </select>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="date-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Start Date
+                            </label>
+                            <input 
+                                type="date" 
+                                id="date-start" 
+                                value={dateRangeStart} 
+                                onChange={(e) => {
+                                    setDateRangeStart(e.target.value);
+                                    setDateFilter('');
+                                }} 
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="date-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                End Date
+                            </label>
+                            <input 
+                                type="date" 
+                                id="date-end" 
+                                value={dateRangeEnd} 
+                                onChange={(e) => {
+                                    setDateRangeEnd(e.target.value);
+                                    setDateFilter('');
+                                }} 
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Clear All Filters Button */}
+                    <button 
+                        onClick={() => { 
+                            setStatusFilter('All'); 
+                            setDateFilter(''); 
+                            setDateRangeStart(''); 
+                            setDateRangeEnd(''); 
+                            setSearchQuery(''); 
+                        }} 
+                        className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        Clear All Filters
+                    </button>
+                </div>
+
+                {/* RIGHT COLUMN - Statistics */}
+                <div className="space-y-6">
+                    {/* Total Time - Prominent Display */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-6 rounded-xl shadow-md border border-indigo-200 dark:border-indigo-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">Total Time</p>
+                            <Clock className="h-6 w-6 text-indigo-500 dark:text-indigo-400" />
+                        </div>
+                        <p className="text-4xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mb-2">{formatTime(totalFilteredTimeMs)}</p>
+                        {filteredAndGroupedLogs.length > 0 && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Status Breakdown */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
+                            <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
+                                <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                    {logs.filter(l => l.status === 'submitted').length}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
+                                <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                                    {logs.filter(l => l.status !== 'submitted').length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Average Session Time */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
+                            <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                        </div>
+                        <p className="text-2xl font-bold font-mono text-purple-900 dark:text-purple-100">
+                            {logs.length > 0 
+                                ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
+                                : '00:00:00'
+                            }
                         </p>
-                    )}
-                </div>
-
-                {/* Submitted vs Unsubmitted Card */}
-                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 p-4 rounded-lg shadow-md border border-green-200 dark:border-green-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-green-600 dark:text-green-300 uppercase tracking-wide">Status Breakdown</p>
-                        <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Per session across all time
+                        </p>
                     </div>
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
-                            <span className="text-lg font-bold text-green-700 dark:text-green-300">
-                                {logs.filter(l => l.status === 'submitted').length}
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
-                            <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                                {logs.filter(l => l.status !== 'submitted').length}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Average Session Time Card */}
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
-                        <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
-                    </div>
-                    <p className="text-3xl font-bold font-mono text-purple-900 dark:text-purple-100">
-                        {logs.length > 0 
-                            ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
-                            : '00:00:00'
-                        }
-                    </p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                        Per session across all time
-                    </p>
                 </div>
             </div>
         </section>
@@ -2431,7 +2511,6 @@ ${combinedReport.trim()}
                   checked={selectedSessions.size > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      // Select all visible sessions
                       const allSessions = new Set();
                       filteredAndGroupedLogs.forEach(group => {
                         group.sessions.forEach(session => allSessions.add(session.id));
@@ -2482,160 +2561,171 @@ ${combinedReport.trim()}
             </div>
           )}
 
-          <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
+          {/* Compact Header */}
+          <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <div className="flex items-center gap-4">
+              <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200">
+                <List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />
+                Time Log History
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {filteredAndGroupedLogs.length} tickets • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} sessions
+              </span>
+            </div>
             <div className="flex items-center gap-2">
-                {statusFilter === 'Submitted' ? (
-                  <button 
-                    onClick={handleMarkAsUnsubmitted}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+              {statusFilter === 'Submitted' ? (
+                <button 
+                  onClick={handleMarkAsUnsubmitted}
+                  disabled={isActionDisabled}
+                  className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                >
+                  Unsubmit
+                </button>
+              ) : (
+                <button 
+                  onClick={handleCreateDraft}
+                  disabled={isActionDisabled}
+                  className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  AI Draft
+                </button>
+              )}
+              <div className="relative export-dropdown">
+                <button
+                  ref={exportButtonRef}
+                  onClick={() => {
+                    if (exportOption) {
+                      setExportOption('');
+                      setExportFormat('');
+                      setExportFocusIndex(0);
+                    } else {
+                      setExportOption('menu');
+                    }
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  aria-label="Export"
+                  aria-expanded={exportOption === 'menu'}
+                  aria-haspopup="true"
+                >
+                  <Download className="h-5 w-5" />
+                </button>
+                
+                {exportOption === 'menu' && (
+                  <div 
+                    ref={exportMenuRef}
+                    className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
+                    role="menu"
+                    aria-label="Export options"
                   >
-                    Unsubmit
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleCreateDraft}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                  >
-                    AI Draft
-                  </button>
+                    {!exportFormat ? (
+                      <>
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                          Choose Format
+                        </div>
+                        <button
+                          onClick={() => {
+                            setExportFormat('csv');
+                            setExportFocusIndex(0);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          <span className="text-xl">📄</span>
+                          <span className="font-medium">CSV</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExportFormat('json');
+                            setExportFocusIndex(0);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          <span className="text-xl">📋</span>
+                          <span className="font-medium">JSON</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                          <span>Choose Scope</span>
+                          <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
+                            {exportFormat.toUpperCase()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
+                        >
+                          <ChevronLeft className="h-3 w-3" />
+                          Back to format
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('selected', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={isActionDisabled}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          Selected
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('filtered', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={filteredAndGroupedLogs.length === 0}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          Filtered
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('all', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={logs.length === 0}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          All Data
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
-                <div className="relative export-dropdown">
-                  <button
-                    ref={exportButtonRef}
-                    onClick={() => {
-                      if (exportOption) {
-                        setExportOption('');
-                        setExportFormat('');
-                        setExportFocusIndex(0);
-                      } else {
-                        setExportOption('menu');
-                      }
-                    }}
-                    className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    aria-label="Export"
-                    aria-expanded={exportOption === 'menu'}
-                    aria-haspopup="true"
-                  >
-                    <Download className="h-5 w-5" />
-                  </button>
-                  
-                  {exportOption === 'menu' && (
-                    <div 
-                      ref={exportMenuRef}
-                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
-                      role="menu"
-                      aria-label="Export options"
-                    >
-                      {!exportFormat ? (
-                        /* Step 1: Choose Format */
-                        <>
-                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                            Choose Format
-                          </div>
-                          <button
-                            onClick={() => {
-                              setExportFormat('csv');
-                              setExportFocusIndex(0);
-                            }}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            <span className="text-xl">📄</span>
-                            <span className="font-medium">CSV</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setExportFormat('json');
-                              setExportFocusIndex(0);
-                            }}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            <span className="text-xl">📋</span>
-                            <span className="font-medium">JSON</span>
-                          </button>
-                        </>
-                      ) : (
-                        /* Step 2: Choose Scope */
-                        <>
-                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                            <span>Choose Scope</span>
-                            <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
-                              {exportFormat.toUpperCase()}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
-                          >
-                            <ChevronLeft className="h-3 w-3" />
-                            Back to format
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('selected', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={isActionDisabled}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            Selected
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('filtered', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={filteredAndGroupedLogs.length === 0}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            Filtered
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('all', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={logs.length === 0}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            All Data
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+              </div>
             </div>
           </div>
-           <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
-                <input
-                    type="checkbox"
-                    id="select-all-checkbox"
-                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
-                    onChange={handleToggleSelectAll}
-                    disabled={filteredAndGroupedLogs.length === 0}
-                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Select All Visible
-                </label>
-            </div>
+
+          {/* Select All Checkbox */}
+          <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
+            <input
+              type="checkbox"
+              id="select-all-checkbox"
+              checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+              onChange={handleToggleSelectAll}
+              disabled={filteredAndGroupedLogs.length === 0}
+              className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Select All Visible
+            </label>
+          </div>
+
+          {/* Empty State */}
           {filteredAndGroupedLogs.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <List className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
@@ -2657,132 +2747,253 @@ ${combinedReport.trim()}
               )}
             </div>
           )}
-          <ul className="space-y-6 pt-4">
-            {filteredAndGroupedLogs.map((group) => {
-              const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
-              const submissionDate = isFullySubmitted 
-                ? Math.max(...group.sessions.map(s => s.submissionDate?.getTime() || 0)) 
-                : null;
-              return (
-              <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
-                   <div className="flex items-start flex-grow">
-                        <input
+
+          {/* Compact Table Layout */}
+          <div className="overflow-x-auto pt-4">
+            <table className="w-full border-collapse">
+              {/* Table Header */}
+              <thead>
+                <tr className="border-b-2 border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-3 px-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+                      onChange={handleToggleSelectAll}
+                      disabled={filteredAndGroupedLogs.length === 0}
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </th>
+                  <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[200px]">Ticket ID</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Total Time</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sessions</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Status</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-32">Actions</th>
+                </tr>
+              </thead>
+              
+              {/* Table Body */}
+              <tbody>
+                {filteredAndGroupedLogs.map((group) => {
+                  const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+                  
+                  return (
+                    <React.Fragment key={group.ticketId}>
+                      {/* Main Ticket Row */}
+                      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="py-3 px-2">
+                          <input
                             type="checkbox"
                             aria-label={`Select ticket ${group.ticketId}`}
                             checked={selectedTickets.has(group.ticketId)}
                             onChange={() => handleToggleSelectTicket(group.ticketId)}
-                            className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 mr-4 mt-1 self-start flex-shrink-0"
-                        />
-                        <div className="flex-grow">
-                            <div className="flex items-center gap-2">
-                                {editingTicketId === group.ticketId ? (
-                                    <input
-                                        type="text"
-                                        value={editingTicketValue}
-                                        onChange={(e) => setEditingTicketValue(e.target.value)}
-                                        onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                handleUpdateTicketId(group.ticketId, editingTicketValue);
-                                            } else if (e.key === 'Escape') {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                setEditingTicketId(null);
-                                            }
-                                        }}
-                                        className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300"
-                                        autoFocus
-                                    />
-                                ) : (
-                                    <>
-                                        <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
-                                        {isFullySubmitted && <Check className="w-5 h-5 text-green-500" title="All sessions submitted"/>}
-                                        <button 
-                                            onClick={() => {
-                                                setEditingTicketId(group.ticketId);
-                                                setEditingTicketValue(group.ticketId);
-                                            }}
-                                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                            title="Edit Ticket ID"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
-                            <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
-                            {submissionDate && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Submitted on: {new Date(submissionDate).toLocaleDateString()}
-                              </p>
-                            )}
-                        </div>
-                    </div>
-                  <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
-                    {group.isClosed ? (
-                        <>
-                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-                            <button onClick={() => handleReopenTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
-                                <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <button onClick={() => handleCloseTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
-                            </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
-                                <Repeat className="w-4 w-4" /><span>Start New Session</span>
-                            </button>
-                        </>
-                    )}
-                  </div>
-                </div>
-                <ul className="pl-3 space-y-2 mt-2 border-l-2 border-gray-300 dark:border-gray-600">
-                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
-                        <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
-                            <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        aria-label={`Select session ${session.id}`}
-                                        checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
-                                        onChange={() => handleToggleSelectSession(session.id)}
-                                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
-                                    <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
-                                </div>
-                                <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        </td>
+                        
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {editingTicketId === group.ticketId ? (
+                              <input
+                                type="text"
+                                value={editingTicketValue}
+                                onChange={(e) => setEditingTicketValue(e.target.value)}
+                                onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleUpdateTicketId(group.ticketId, editingTicketValue);
+                                  } else if (e.key === 'Escape') {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setEditingTicketId(null);
+                                  }
+                                }}
+                                className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-grow"
+                                autoFocus
+                              />
+                            ) : (
+                              <>
+                                <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-grow">
+                                  {group.ticketId}
+                                </span>
+                                {isFullySubmitted && <Check className="w-4 h-4 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
                                 <button 
-                                    onClick={() => {
-                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
-                                        setIsReallocateModalOpen(true);
-                                    }} 
-                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
-                                    <CornerUpRight className="h-4 w-4" />
+                                  onClick={() => {
+                                    setEditingTicketId(group.ticketId);
+                                    setEditingTicketValue(group.ticketId);
+                                  }}
+                                  className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
+                                  title="Edit Ticket ID"
+                                >
+                                  <Pencil className="w-3 h-3" />
                                 </button>
-                                <button onClick={() => handleDeleteClick(session)} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </div>
-                            {session.note && (
-                                <p className={`mt-1 flex items-start text-xs border-t border-gray-200 dark:border-gray-600 pt-1 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                                    <BookOpen className="h-3 w-3 mr-1 text-indigo-400 dark:text-indigo-500 flex-shrink-0 mt-[2px]"/>
-                                    <span className="italic break-words">{session.note}</span>
-                                </p>
+                              </>
                             )}
-                        </li>
-                    ))}
-                </ul>
-              </li>
-              )
-            })}
-          </ul>
+                          </div>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-right">
+                          <span className="font-mono font-bold text-indigo-800 dark:text-indigo-200">
+                            {formatTime(group.totalDurationMs)}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {group.sessions.length}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            group.isClosed 
+                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
+                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                          }`}>
+                            {group.isClosed ? 'Closed' : 'Open'}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {group.isClosed ? (
+                              <button 
+                                onClick={() => handleReopenTicket(group.ticketId)} 
+                                className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                title="Reopen Ticket"
+                              >
+                                <Repeat className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={() => handleCloseTicket(group.ticketId)} 
+                                  className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Close Ticket"
+                                >
+                                  <Lock className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => handleContinueTicket(group.ticketId)} 
+                                  className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                  title="Start New Session"
+                                >
+                                  <Repeat className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      
+                      {/* Sessions Rows */}
+                      {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
+                        <tr key={session.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                          <td className="py-2 px-2 pl-8">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select session ${session.id}`}
+                              checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                              onChange={() => handleToggleSelectSession(session.id)}
+                              className="h-3 w-3 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </td>
+                          
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              {session.status === 'submitted' && <Check className="h-3 w-3 text-green-500 flex-shrink-0" title="Submitted"/>}
+                              <span className={`font-mono font-bold ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                                {formatTime(session.accumulatedMs)}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              <div className="flex items-center gap-1 min-w-0 flex-grow">
+                                {editingSessionNote === session.id ? (
+                                  <input
+                                    type="text"
+                                    value={editingSessionNoteValue}
+                                    onChange={(e) => setEditingSessionNoteValue(e.target.value)}
+                                    onBlur={() => handleUpdateSessionNote(session.id, editingSessionNoteValue)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        handleUpdateSessionNote(session.id, editingSessionNoteValue);
+                                      } else if (e.key === 'Escape') {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setEditingSessionNote(null);
+                                        setEditingSessionNoteValue('');
+                                      }
+                                    }}
+                                    placeholder="Add session note..."
+                                    maxLength={5000}
+                                    className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-grow"
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <>
+                                    {session.note ? (
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0 flex-grow">
+                                        <BookOpen className="h-3 w-3 inline mr-1"/>
+                                        {session.note}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400 dark:text-gray-500 italic min-w-0 flex-grow">
+                                        No notes
+                                      </span>
+                                    )}
+                                    <button 
+                                      onClick={() => {
+                                        setEditingSessionNote(session.id);
+                                        setEditingSessionNoteValue(session.note || '');
+                                      }}
+                                      className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
+                                      title="Edit Session Note"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          
+                          <td className="py-2 px-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                                  setIsReallocateModalOpen(true);
+                                }} 
+                                className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                title="Reallocate Session"
+                              >
+                                <CornerUpRight className="h-3 w-3" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(session)} 
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                title="Delete Session"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     </div>
