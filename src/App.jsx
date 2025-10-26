@@ -2397,6 +2397,20 @@ ${combinedReport.trim()}
                             />
                         </div>
                     </div>
+
+                    {/* Clear All Filters Button */}
+                    <button 
+                        onClick={() => { 
+                            setStatusFilter('All'); 
+                            setDateFilter(''); 
+                            setDateRangeStart(''); 
+                            setDateRangeEnd(''); 
+                            setSearchQuery(''); 
+                        }} 
+                        className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    >
+                        Clear All Filters
+                    </button>
                 </div>
 
                 {/* RIGHT COLUMN - Statistics */}
@@ -2453,20 +2467,6 @@ ${combinedReport.trim()}
                             Per session across all time
                         </p>
                     </div>
-
-                    {/* Clear All Filters Button */}
-                    <button 
-                        onClick={() => { 
-                            setStatusFilter('All'); 
-                            setDateFilter(''); 
-                            setDateRangeStart(''); 
-                            setDateRangeEnd(''); 
-                            setSearchQuery(''); 
-                        }} 
-                        className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                    >
-                        Clear All Filters
-                    </button>
                 </div>
             </div>
         </section>
