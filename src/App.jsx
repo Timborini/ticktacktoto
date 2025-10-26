@@ -991,15 +991,6 @@ const App = () => {
     exportOptionRef.current = exportOption;
   }, [exportOption]);
 
-  // --- Update refs for keyboard handler optimization ---
-  useEffect(() => {
-    actionHandlerRef.current = actionHandler;
-    isButtonDisabledRef.current = isButtonDisabled;
-    isStopButtonDisabledRef.current = isStopButtonDisabled;
-    stopTimerRef.current = stopTimer;
-    editingTicketIdRef.current = editingTicketId;
-  });
-
   // --- Effect to close export dropdown when clicking outside (Optimized) ---
   useEffect(() => {
     const handleClickOutside = (event) => {
