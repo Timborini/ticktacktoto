@@ -2724,171 +2724,208 @@ ${combinedReport.trim()}
             </div>
           )}
 
-          {/* Compact List Layout */}
-          <div className="space-y-2 pt-4">
-            {filteredAndGroupedLogs.map((group) => {
-              const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+          {/* Compact Table Layout */}
+          <div className="overflow-x-auto pt-4">
+            <table className="w-full border-collapse">
+              {/* Table Header */}
+              <thead>
+                <tr className="border-b-2 border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-3 px-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+                      onChange={handleToggleSelectAll}
+                      disabled={filteredAndGroupedLogs.length === 0}
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </th>
+                  <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[200px]">Ticket ID</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Total Time</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sessions</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Status</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-32">Actions</th>
+                </tr>
+              </thead>
               
-              return (
-                <div key={group.ticketId} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {/* Ticket Header Row */}
-                  <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center gap-3 flex-grow min-w-0">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ticket ${group.ticketId}`}
-                        checked={selectedTickets.has(group.ticketId)}
-                        onChange={() => handleToggleSelectTicket(group.ticketId)}
-                        className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
-                      />
-                      
-                      <div className="flex items-center gap-2 min-w-0 flex-grow">
-                        {editingTicketId === group.ticketId ? (
-                          <input
-                            type="text"
-                            value={editingTicketValue}
-                            onChange={(e) => setEditingTicketValue(e.target.value)}
-                            onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                handleUpdateTicketId(group.ticketId, editingTicketValue);
-                              } else if (e.key === 'Escape') {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setEditingTicketId(null);
-                              }
-                            }}
-                            className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300 min-w-0 flex-grow"
-                            autoFocus
-                          />
-                        ) : (
-                          <>
-                            <h3 className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg truncate">{group.ticketId}</h3>
-                            {isFullySubmitted && <Check className="w-5 h-5 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
-                            <button 
-                              onClick={() => {
-                                setEditingTicketId(group.ticketId);
-                                setEditingTicketValue(group.ticketId);
-                              }}
-                              className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
-                              title="Edit Ticket ID"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 flex-shrink-0">
-                      {/* Stats */}
-                      <div className="text-right">
-                        <div className="font-mono font-bold text-lg text-indigo-800 dark:text-indigo-200">
-                          {formatTime(group.totalDurationMs)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {group.sessions.length} session{group.sessions.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-
-                      {/* Status Badge */}
-                      <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        group.isClosed 
-                          ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
-                          : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                      }`}>
-                        {group.isClosed ? 'Closed' : 'Open'}
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1">
-                        {group.isClosed ? (
-                          <button 
-                            onClick={() => handleReopenTicket(group.ticketId)} 
-                            className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                            title="Reopen Ticket"
-                          >
-                            <Repeat className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <>
-                            <button 
-                              onClick={() => handleCloseTicket(group.ticketId)} 
-                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              title="Close Ticket"
-                            >
-                              <Lock className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleContinueTicket(group.ticketId)} 
-                              className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                              title="Start New Session"
-                            >
-                              <Repeat className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Compact Sessions List */}
-                  <div className="divide-y divide-gray-200 dark:divide-gray-600">
-                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
-                      <div key={session.id} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <div className="flex items-center gap-3 flex-grow min-w-0">
+              {/* Table Body */}
+              <tbody>
+                {filteredAndGroupedLogs.map((group) => {
+                  const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+                  
+                  return (
+                    <React.Fragment key={group.ticketId}>
+                      {/* Main Ticket Row */}
+                      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="py-3 px-2">
                           <input
                             type="checkbox"
-                            aria-label={`Select session ${session.id}`}
-                            checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
-                            onChange={() => handleToggleSelectSession(session.id)}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                            aria-label={`Select ticket ${group.ticketId}`}
+                            checked={selectedTickets.has(group.ticketId)}
+                            onChange={() => handleToggleSelectTicket(group.ticketId)}
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
                           />
-                          
-                          <div className="flex items-center gap-2 min-w-0 flex-grow">
-                            {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500 flex-shrink-0" title="Submitted"/>}
-                            <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
-                              {formatTime(session.accumulatedMs)}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                              {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                            {session.note && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0">
-                                <BookOpen className="h-3 w-3 inline mr-1"/>
-                                {session.note}
-                              </span>
+                        </td>
+                        
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {editingTicketId === group.ticketId ? (
+                              <input
+                                type="text"
+                                value={editingTicketValue}
+                                onChange={(e) => setEditingTicketValue(e.target.value)}
+                                onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleUpdateTicketId(group.ticketId, editingTicketValue);
+                                  } else if (e.key === 'Escape') {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setEditingTicketId(null);
+                                  }
+                                }}
+                                className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-grow"
+                                autoFocus
+                              />
+                            ) : (
+                              <>
+                                <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-grow">
+                                  {group.ticketId}
+                                </span>
+                                {isFullySubmitted && <Check className="w-4 h-4 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
+                                <button 
+                                  onClick={() => {
+                                    setEditingTicketId(group.ticketId);
+                                    setEditingTicketValue(group.ticketId);
+                                  }}
+                                  className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
+                                  title="Edit Ticket ID"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              </>
                             )}
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button 
-                            onClick={() => {
-                              setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
-                              setIsReallocateModalOpen(true);
-                            }} 
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                            title="Reallocate Session"
-                          >
-                            <CornerUpRight className="h-4 w-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteClick(session)} 
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title="Delete Session"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                        </td>
+                        
+                        <td className="py-3 px-2 text-right">
+                          <span className="font-mono font-bold text-indigo-800 dark:text-indigo-200">
+                            {formatTime(group.totalDurationMs)}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {group.sessions.length}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            group.isClosed 
+                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
+                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                          }`}>
+                            {group.isClosed ? 'Closed' : 'Open'}
+                          </span>
+                        </td>
+                        
+                        <td className="py-3 px-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {group.isClosed ? (
+                              <button 
+                                onClick={() => handleReopenTicket(group.ticketId)} 
+                                className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                title="Reopen Ticket"
+                              >
+                                <Repeat className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={() => handleCloseTicket(group.ticketId)} 
+                                  className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Close Ticket"
+                                >
+                                  <Lock className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => handleContinueTicket(group.ticketId)} 
+                                  className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                  title="Start New Session"
+                                >
+                                  <Repeat className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      
+                      {/* Sessions Rows */}
+                      {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
+                        <tr key={session.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                          <td className="py-2 px-2 pl-8">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select session ${session.id}`}
+                              checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                              onChange={() => handleToggleSelectSession(session.id)}
+                              className="h-3 w-3 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </td>
+                          
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              {session.status === 'submitted' && <Check className="h-3 w-3 text-green-500 flex-shrink-0" title="Submitted"/>}
+                              <span className={`font-mono font-bold ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                                {formatTime(session.accumulatedMs)}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                              {session.note && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+                                  <BookOpen className="h-3 w-3 inline mr-1"/>
+                                  {session.note}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          
+                          <td className="py-2 px-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                                  setIsReallocateModalOpen(true);
+                                }} 
+                                className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                title="Reallocate Session"
+                              >
+                                <CornerUpRight className="h-3 w-3" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(session)} 
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                title="Delete Session"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
