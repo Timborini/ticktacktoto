@@ -2190,29 +2190,33 @@ ${combinedReport.trim()}
                 )}
               </div>
 
-              {/* Session Notes - Only show when timer is active */}
-              {(isTimerRunning || isTimerPaused) && (
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label htmlFor="session-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Session Notes
-                    </label>
-                    <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {currentNote.length}/5000
-                    </span>
-                  </div>
-                  <textarea
-                    id="session-notes"
-                    placeholder="E.g., Fixed critical bug in user authentication module."
-                    value={currentNote}
-                    onChange={(e) => setCurrentNote(e.target.value)}
-                    maxLength={5000}
-                    rows="3"
-                    className="w-full p-3 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saved automatically on pause/stop</p>
+              {/* Session Notes - Smooth show/hide with CSS transitions */}
+              <div 
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  (isTimerRunning || isTimerPaused) 
+                    ? 'max-h-48 opacity-100' 
+                    : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <label htmlFor="session-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Session Notes
+                  </label>
+                  <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {currentNote.length}/5000
+                  </span>
                 </div>
-              )}
+                <textarea
+                  id="session-notes"
+                  placeholder="E.g., Fixed critical bug in user authentication module."
+                  value={currentNote}
+                  onChange={(e) => setCurrentNote(e.target.value)}
+                  maxLength={5000}
+                  rows="3"
+                  className="w-full p-3 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saved automatically on pause/stop</p>
+              </div>
             </div>
 
             {/* RIGHT COLUMN - Timer & Controls */}
