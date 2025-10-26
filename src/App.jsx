@@ -2724,9 +2724,6 @@ ${combinedReport.trim()}
           <div className="space-y-2 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
-              const submissionDate = isFullySubmitted 
-                ? Math.max(...group.sessions.map(s => s.submissionDate?.getTime() || 0)) 
-                : null;
               
               return (
                 <div key={group.ticketId} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
