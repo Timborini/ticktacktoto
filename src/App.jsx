@@ -2901,9 +2901,9 @@ ${combinedReport.trim()}
                           </td>
                           
                           <td className="py-2 px-2">
-                            <div className="flex items-center gap-2 text-sm whitespace-nowrap">
+                            <div className="flex items-center gap-2 text-sm">
                               {session.status === 'submitted' && <Check className="h-3 w-3 text-green-500 flex-shrink-0" title="Submitted"/>}
-                              <span className={`font-mono font-bold ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              <span className={`font-mono font-bold whitespace-nowrap ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
                                 {formatTime(session.accumulatedMs)}
                               </span>
                               <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
