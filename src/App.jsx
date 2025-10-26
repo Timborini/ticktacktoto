@@ -550,8 +550,6 @@ const App = () => {
   // --- Inline Editing State ---
   const [editingTicketId, setEditingTicketId] = useState(null);
   const [editingTicketValue, setEditingTicketValue] = useState('');
-  const [editingSessionNote, setEditingSessionNote] = useState(null);
-  const [editingSessionNoteValue, setEditingSessionNoteValue] = useState('');
 
   // --- Sharing State ---
   const [shareId, setShareId] = useState(null);
@@ -1458,27 +1456,6 @@ const App = () => {
     }
   }, [getCollectionRef, getTicketStatusCollectionRef, db]);
 
-  const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
-    const sanitizedNote = sanitizeNote(newNote);
-    if (!getCollectionRef) {
-      setEditingSessionNote(null);
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      await updateDoc(doc(getCollectionRef, sessionId), {
-        note: sanitizedNote
-      });
-    } catch (error) {
-      console.error("Error updating session note:", error);
-      setFirebaseError("Failed to update session note. Please check the console.");
-    } finally {
-      setEditingSessionNote(null);
-      setEditingSessionNoteValue('');
-      setIsLoading(false);
-    }
-  }, [getCollectionRef]);
 
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
@@ -1815,17 +1792,6 @@ ${combinedReport.trim()}
     });
   };
 
-  const handleToggleSelectSession = (sessionId) => {
-    setSelectedSessions(prevSelected => {
-        const newSelected = new Set(prevSelected);
-        if (newSelected.has(sessionId)) {
-            newSelected.delete(sessionId);
-        } else {
-            newSelected.add(sessionId);
-        }
-        return newSelected;
-    });
-  };
 
   const handleToggleSelectAll = () => {
       const allVisibleTicketIds = new Set(filteredAndGroupedLogs.map(g => g.ticketId));
@@ -1890,7 +1856,7 @@ ${combinedReport.trim()}
   useEffect(() => {
     const handleKeyDown = (event) => {
       const hasModal = document.querySelector('.fixed.inset-0');
-      const isEditing = editingTicketIdRef.current || editingSessionNote;
+      const isEditing = editingTicketIdRef.current;
 
       // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
@@ -1920,7 +1886,7 @@ ${combinedReport.trim()}
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [editingSessionNote]); // Include editingSessionNote in dependencies
+  }, []); // No dependencies needed
 
 
   // --- Render Logic ---
