@@ -2764,8 +2764,8 @@ ${combinedReport.trim()}
                     />
                   </th>
                   <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[200px]">Ticket ID</th>
-                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Total Time</th>
-                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sessions</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[100px] whitespace-nowrap">Total Time</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Sessions</th>
                   <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Status</th>
                   <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-32">Actions</th>
                 </tr>
@@ -2833,7 +2833,7 @@ ${combinedReport.trim()}
                           </div>
                         </td>
                         
-                        <td className="py-3 px-2 text-right">
+                        <td className="py-3 px-2 text-right whitespace-nowrap">
                           <span className="font-mono font-bold text-indigo-800 dark:text-indigo-200">
                             {formatTime(group.totalDurationMs)}
                           </span>
@@ -2903,10 +2903,10 @@ ${combinedReport.trim()}
                           <td className="py-2 px-2">
                             <div className="flex items-center gap-2 text-sm">
                               {session.status === 'submitted' && <Check className="h-3 w-3 text-green-500 flex-shrink-0" title="Submitted"/>}
-                              <span className={`font-mono font-bold ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              <span className={`font-mono font-bold whitespace-nowrap ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
                                 {formatTime(session.accumulatedMs)}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                 {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                               <div className="flex items-center gap-1 min-w-0 flex-grow">
