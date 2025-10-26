@@ -550,6 +550,8 @@ const App = () => {
   // --- Inline Editing State ---
   const [editingTicketId, setEditingTicketId] = useState(null);
   const [editingTicketValue, setEditingTicketValue] = useState('');
+  const [editingSessionNote, setEditingSessionNote] = useState(null);
+  const [editingSessionNoteValue, setEditingSessionNoteValue] = useState('');
 
   // --- Sharing State ---
   const [shareId, setShareId] = useState(null);
@@ -1456,6 +1458,27 @@ const App = () => {
     }
   }, [getCollectionRef, getTicketStatusCollectionRef, db]);
 
+  const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
+    const sanitizedNote = sanitizeNote(newNote);
+    if (!getCollectionRef) {
+      setEditingSessionNote(null);
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await updateDoc(doc(getCollectionRef, sessionId), {
+        note: sanitizedNote
+      });
+    } catch (error) {
+      console.error("Error updating session note:", error);
+      setFirebaseError("Failed to update session note. Please check the console.");
+    } finally {
+      setEditingSessionNote(null);
+      setEditingSessionNoteValue('');
+      setIsLoading(false);
+    }
+  }, [getCollectionRef]);
 
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = new Set(selectedSessions);
@@ -1856,7 +1879,7 @@ ${combinedReport.trim()}
   useEffect(() => {
     const handleKeyDown = (event) => {
       const hasModal = document.querySelector('.fixed.inset-0');
-      const isEditing = editingTicketIdRef.current;
+      const isEditing = editingTicketIdRef.current || editingSessionNote;
 
       // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
@@ -1886,7 +1909,7 @@ ${combinedReport.trim()}
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []); // No dependencies needed
+  }, [editingSessionNote]); // Include editingSessionNote in dependencies
 
 
   // --- Render Logic ---
@@ -2804,7 +2827,44 @@ ${combinedReport.trim()}
                                 {group.sessions.map(session => (
                                   <div key={session.id} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 min-w-0">
                                     <BookOpen className="h-3 w-3 flex-shrink-0"/>
-                                    <span className="truncate">{session.note || 'No notes'}</span>
+                                    {editingSessionNote === session.id ? (
+                                      <input
+                                        type="text"
+                                        value={editingSessionNoteValue}
+                                        onChange={(e) => setEditingSessionNoteValue(e.target.value)}
+                                        onBlur={() => handleUpdateSessionNote(session.id, editingSessionNoteValue)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            handleUpdateSessionNote(session.id, editingSessionNoteValue);
+                                          } else if (e.key === 'Escape') {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            setEditingSessionNote(null);
+                                            setEditingSessionNoteValue('');
+                                          }
+                                        }}
+                                        placeholder="Add session note..."
+                                        maxLength={5000}
+                                        className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-1"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <>
+                                        <span className="truncate flex-1">{session.note || 'No notes'}</span>
+                                        <button 
+                                          onClick={() => {
+                                            setEditingSessionNote(session.id);
+                                            setEditingSessionNoteValue(session.note || '');
+                                          }}
+                                          className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
+                                          title="Edit Session Note"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 ))}
                               </div>
