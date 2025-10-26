@@ -25,7 +25,7 @@ const decodeIfBase64 = (value) => {
     if (!value) return value;
     const looksBase64 = /^[A-Za-z0-9+/=]+$/.test(value) && value.length >= 40;
     return looksBase64 ? atob(value) : value;
-  } catch (_) {
+  } catch {
     return value;
   }
 };
