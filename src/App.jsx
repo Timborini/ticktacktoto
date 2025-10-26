@@ -2886,7 +2886,7 @@ ${combinedReport.trim()}
                                 {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                               {session.note && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+                                <span className="text-xs text-gray-500 dark:text-gray-400 break-words">
                                   <BookOpen className="h-3 w-3 inline mr-1"/>
                                   {session.note}
                                 </span>
