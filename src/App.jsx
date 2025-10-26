@@ -2750,7 +2750,7 @@ ${combinedReport.trim()}
 
           {/* Compact Table Layout */}
           <div className="overflow-x-auto pt-4">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse table-fixed" style={{minWidth: '800px'}}>
               {/* Table Header */}
               <thead>
                 <tr className="border-b-2 border-gray-200 dark:border-gray-700">
@@ -2763,11 +2763,12 @@ ${combinedReport.trim()}
                       className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
                     />
                   </th>
-                  <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[200px]">Ticket ID</th>
-                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 min-w-[100px] whitespace-nowrap">Total Time</th>
-                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Sessions</th>
-                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Status</th>
-                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-32">Actions</th>
+                  <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-48">Ticket ID</th>
+                  <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Total Time</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sessions</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-16">Status</th>
+                  <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-64">Session Details</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Actions</th>
                 </tr>
               </thead>
               
@@ -2809,12 +2810,12 @@ ${combinedReport.trim()}
                                     setEditingTicketId(null);
                                   }
                                 }}
-                                className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-grow"
+                                className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-1"
                                 autoFocus
                               />
                             ) : (
                               <>
-                                <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-grow">
+                                <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-1">
                                   {group.ticketId}
                                 </span>
                                 {isFullySubmitted && <Check className="w-4 h-4 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
@@ -2855,6 +2856,7 @@ ${combinedReport.trim()}
                           </span>
                         </td>
                         
+                        <td className="py-3 px-2"></td>
                         <td className="py-3 px-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {group.isClosed ? (
@@ -2900,16 +2902,21 @@ ${combinedReport.trim()}
                             />
                           </td>
                           
-                          <td className="py-2 px-2">
-                            <div className="flex items-center gap-2 text-sm">
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          <td className="py-2 px-2"></td>
+                          
+                          <td className="py-2 px-2 max-w-0 w-full">
+                            <div className="flex items-center gap-2 text-sm min-w-0">
                               {session.status === 'submitted' && <Check className="h-3 w-3 text-green-500 flex-shrink-0" title="Submitted"/>}
-                              <span className={`font-mono font-bold whitespace-nowrap ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              <span className={`font-mono font-bold whitespace-nowrap flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
                                 {formatTime(session.accumulatedMs)}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
                                 {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
-                              <div className="flex items-center gap-1 min-w-0 flex-grow">
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
                                 {editingSessionNote === session.id ? (
                                   <input
                                     type="text"
@@ -2930,18 +2937,18 @@ ${combinedReport.trim()}
                                     }}
                                     placeholder="Add session note..."
                                     maxLength={5000}
-                                    className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-grow"
+                                    className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-1"
                                     autoFocus
                                   />
                                 ) : (
                                   <>
                                     {session.note ? (
-                                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0 flex-grow">
-                                        <BookOpen className="h-3 w-3 inline mr-1"/>
-                                        {session.note}
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0 flex-1">
+                                        <BookOpen className="h-3 w-3 inline mr-1 flex-shrink-0"/>
+                                        <span className="truncate">{session.note}</span>
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-gray-400 dark:text-gray-500 italic min-w-0 flex-grow">
+                                      <span className="text-xs text-gray-400 dark:text-gray-500 italic min-w-0 flex-1">
                                         No notes
                                       </span>
                                     )}
@@ -2960,10 +2967,6 @@ ${combinedReport.trim()}
                               </div>
                             </div>
                           </td>
-                          
-                          <td className="py-2 px-2"></td>
-                          <td className="py-2 px-2"></td>
-                          <td className="py-2 px-2"></td>
                           
                           <td className="py-2 px-2 text-center">
                             <div className="flex items-center justify-center gap-1">
