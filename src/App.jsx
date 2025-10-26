@@ -2481,7 +2481,6 @@ ${combinedReport.trim()}
                   checked={selectedSessions.size > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      // Select all visible sessions
                       const allSessions = new Set();
                       filteredAndGroupedLogs.forEach(group => {
                         group.sessions.forEach(session => allSessions.add(session.id));
@@ -2532,160 +2531,171 @@ ${combinedReport.trim()}
             </div>
           )}
 
-          <div className="flex justify-between items-center gap-4 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-            <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200 shrink-0"><List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />Time Log History</h2>
+          {/* Compact Header */}
+          <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <div className="flex items-center gap-4">
+              <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200">
+                <List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />
+                Time Log History
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {filteredAndGroupedLogs.length} tickets • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} sessions
+              </span>
+            </div>
             <div className="flex items-center gap-2">
-                {statusFilter === 'Submitted' ? (
-                  <button 
-                    onClick={handleMarkAsUnsubmitted}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+              {statusFilter === 'Submitted' ? (
+                <button 
+                  onClick={handleMarkAsUnsubmitted}
+                  disabled={isActionDisabled}
+                  className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                >
+                  Unsubmit
+                </button>
+              ) : (
+                <button 
+                  onClick={handleCreateDraft}
+                  disabled={isActionDisabled}
+                  className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  AI Draft
+                </button>
+              )}
+              <div className="relative export-dropdown">
+                <button
+                  ref={exportButtonRef}
+                  onClick={() => {
+                    if (exportOption) {
+                      setExportOption('');
+                      setExportFormat('');
+                      setExportFocusIndex(0);
+                    } else {
+                      setExportOption('menu');
+                    }
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  aria-label="Export"
+                  aria-expanded={exportOption === 'menu'}
+                  aria-haspopup="true"
+                >
+                  <Download className="h-5 w-5" />
+                </button>
+                
+                {exportOption === 'menu' && (
+                  <div 
+                    ref={exportMenuRef}
+                    className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
+                    role="menu"
+                    aria-label="Export options"
                   >
-                    Unsubmit
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleCreateDraft}
-                    disabled={isActionDisabled}
-                    className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                  >
-                    AI Draft
-                  </button>
+                    {!exportFormat ? (
+                      <>
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                          Choose Format
+                        </div>
+                        <button
+                          onClick={() => {
+                            setExportFormat('csv');
+                            setExportFocusIndex(0);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          <span className="text-xl">📄</span>
+                          <span className="font-medium">CSV</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExportFormat('json');
+                            setExportFocusIndex(0);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          <span className="text-xl">📋</span>
+                          <span className="font-medium">JSON</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                          <span>Choose Scope</span>
+                          <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
+                            {exportFormat.toUpperCase()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
+                        >
+                          <ChevronLeft className="h-3 w-3" />
+                          Back to format
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('selected', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={isActionDisabled}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          Selected
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('filtered', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={filteredAndGroupedLogs.length === 0}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          Filtered
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExport('all', exportFormat);
+                            setExportOption('');
+                            setExportFormat('');
+                            setExportFocusIndex(0);
+                          }}
+                          disabled={logs.length === 0}
+                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                          role="menuitem"
+                        >
+                          All Data
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
-                <div className="relative export-dropdown">
-                  <button
-                    ref={exportButtonRef}
-                    onClick={() => {
-                      if (exportOption) {
-                        setExportOption('');
-                        setExportFormat('');
-                        setExportFocusIndex(0);
-                      } else {
-                        setExportOption('menu');
-                      }
-                    }}
-                    className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    aria-label="Export"
-                    aria-expanded={exportOption === 'menu'}
-                    aria-haspopup="true"
-                  >
-                    <Download className="h-5 w-5" />
-                  </button>
-                  
-                  {exportOption === 'menu' && (
-                    <div 
-                      ref={exportMenuRef}
-                      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
-                      role="menu"
-                      aria-label="Export options"
-                    >
-                      {!exportFormat ? (
-                        /* Step 1: Choose Format */
-                        <>
-                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                            Choose Format
-                          </div>
-                          <button
-                            onClick={() => {
-                              setExportFormat('csv');
-                              setExportFocusIndex(0);
-                            }}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            <span className="text-xl">📄</span>
-                            <span className="font-medium">CSV</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setExportFormat('json');
-                              setExportFocusIndex(0);
-                            }}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            <span className="text-xl">📋</span>
-                            <span className="font-medium">JSON</span>
-                          </button>
-                        </>
-                      ) : (
-                        /* Step 2: Choose Scope */
-                        <>
-                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                            <span>Choose Scope</span>
-                            <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
-                              {exportFormat.toUpperCase()}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
-                          >
-                            <ChevronLeft className="h-3 w-3" />
-                            Back to format
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('selected', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={isActionDisabled}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            Selected
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('filtered', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={filteredAndGroupedLogs.length === 0}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            Filtered
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExport('all', exportFormat);
-                              setExportOption('');
-                              setExportFormat('');
-                              setExportFocusIndex(0);
-                            }}
-                            disabled={logs.length === 0}
-                            className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                            role="menuitem"
-                          >
-                            All Data
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+              </div>
             </div>
           </div>
-           <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
-                <input
-                    type="checkbox"
-                    id="select-all-checkbox"
-                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
-                    onChange={handleToggleSelectAll}
-                    disabled={filteredAndGroupedLogs.length === 0}
-                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Select All Visible
-                </label>
-            </div>
+
+          {/* Select All Checkbox */}
+          <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
+            <input
+              type="checkbox"
+              id="select-all-checkbox"
+              checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+              onChange={handleToggleSelectAll}
+              disabled={filteredAndGroupedLogs.length === 0}
+              className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Select All Visible
+            </label>
+          </div>
+
+          {/* Empty State */}
           {filteredAndGroupedLogs.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <List className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
@@ -2707,132 +2717,176 @@ ${combinedReport.trim()}
               )}
             </div>
           )}
-          <ul className="space-y-6 pt-4">
+
+          {/* Compact List Layout */}
+          <div className="space-y-2 pt-4">
             {filteredAndGroupedLogs.map((group) => {
               const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
               const submissionDate = isFullySubmitted 
                 ? Math.max(...group.sessions.map(s => s.submissionDate?.getTime() || 0)) 
                 : null;
+              
               return (
-              <li key={group.ticketId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-start mb-2 border-b border-gray-200 dark:border-gray-600 pb-2">
-                   <div className="flex items-start flex-grow">
-                        <input
-                            type="checkbox"
-                            aria-label={`Select ticket ${group.ticketId}`}
-                            checked={selectedTickets.has(group.ticketId)}
-                            onChange={() => handleToggleSelectTicket(group.ticketId)}
-                            className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 mr-4 mt-1 self-start flex-shrink-0"
-                        />
-                        <div className="flex-grow">
-                            <div className="flex items-center gap-2">
-                                {editingTicketId === group.ticketId ? (
-                                    <input
-                                        type="text"
-                                        value={editingTicketValue}
-                                        onChange={(e) => setEditingTicketValue(e.target.value)}
-                                        onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                handleUpdateTicketId(group.ticketId, editingTicketValue);
-                                            } else if (e.key === 'Escape') {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                setEditingTicketId(null);
-                                            }
-                                        }}
-                                        className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300"
-                                        autoFocus
-                                    />
-                                ) : (
-                                    <>
-                                        <p className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg break-all">{group.ticketId}</p>
-                                        {isFullySubmitted && <Check className="w-5 h-5 text-green-500" title="All sessions submitted"/>}
-                                        <button 
-                                            onClick={() => {
-                                                setEditingTicketId(group.ticketId);
-                                                setEditingTicketValue(group.ticketId);
-                                            }}
-                                            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                            title="Edit Ticket ID"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">Total Time: <span className="font-mono font-bold text-base text-indigo-800 dark:text-indigo-200">{formatTime(group.totalDurationMs)}</span></p>
-                            <p className="text-gray-400 dark:text-gray-500 text-xs">({group.sessions.length} recorded sessions)</p>
-                            {submissionDate && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Submitted on: {new Date(submissionDate).toLocaleDateString()}
-                              </p>
-                            )}
-                        </div>
+                <div key={group.ticketId} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  {/* Ticket Header Row */}
+                  <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center gap-3 flex-grow min-w-0">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ticket ${group.ticketId}`}
+                        checked={selectedTickets.has(group.ticketId)}
+                        onChange={() => handleToggleSelectTicket(group.ticketId)}
+                        className="h-5 w-5 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                      />
+                      
+                      <div className="flex items-center gap-2 min-w-0 flex-grow">
+                        {editingTicketId === group.ticketId ? (
+                          <input
+                            type="text"
+                            value={editingTicketValue}
+                            onChange={(e) => setEditingTicketValue(e.target.value)}
+                            onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                handleUpdateTicketId(group.ticketId, editingTicketValue);
+                              } else if (e.key === 'Escape') {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setEditingTicketId(null);
+                              }
+                            }}
+                            className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg bg-indigo-50 dark:bg-gray-600 rounded-md px-2 py-0.5 border border-indigo-300 min-w-0 flex-grow"
+                            autoFocus
+                          />
+                        ) : (
+                          <>
+                            <h3 className="text-indigo-700 dark:text-indigo-300 font-extrabold text-lg truncate">{group.ticketId}</h3>
+                            {isFullySubmitted && <Check className="w-5 h-5 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
+                            <button 
+                              onClick={() => {
+                                setEditingTicketId(group.ticketId);
+                                setEditingTicketValue(group.ticketId);
+                              }}
+                              className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
+                              title="Edit Ticket ID"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  <div className="flex flex-col space-y-2 mt-1 min-w-[120px] flex-shrink-0 ml-2">
-                    {group.isClosed ? (
-                        <>
-                            <span className="flex items-center justify-center space-x-1 px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-xs rounded-lg"><Lock className="h-4 w-4" /><span>Closed</span></span>
-                            <button onClick={() => handleReopenTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-lg hover:bg-green-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Reopen this Ticket for further tracking">
-                                <Repeat className="w-4 w-4" /><span>Re-open Ticket</span>
+
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      {/* Stats */}
+                      <div className="text-right">
+                        <div className="font-mono font-bold text-lg text-indigo-800 dark:text-indigo-200">
+                          {formatTime(group.totalDurationMs)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {group.sessions.length} session{group.sessions.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        group.isClosed 
+                          ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
+                          : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                      }`}>
+                        {group.isClosed ? 'Closed' : 'Open'}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1">
+                        {group.isClosed ? (
+                          <button 
+                            onClick={() => handleReopenTicket(group.ticketId)} 
+                            className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                            title="Reopen Ticket"
+                          >
+                            <Repeat className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => handleCloseTicket(group.ticketId)} 
+                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              title="Close Ticket"
+                            >
+                              <Lock className="w-4 h-4" />
                             </button>
-                        </>
-                    ) : (
-                        <>
-                            <button onClick={() => handleCloseTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-red-100 text-red-700 font-semibold text-xs rounded-lg hover:bg-red-200 transition-colors active:scale-[0.98] disabled:opacity-50" title="Permanently Close this Ticket">
-                                <Lock className="w-4 h-4" /><span>Close Ticket</span>
+                            <button 
+                              onClick={() => handleContinueTicket(group.ticketId)} 
+                              className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                              title="Start New Session"
+                            >
+                              <Repeat className="w-4 h-4" />
                             </button>
-                            <button onClick={() => handleContinueTicket(group.ticketId)} className="flex items-center justify-center space-x-1 px-3 py-1 bg-indigo-500 text-white font-semibold text-xs rounded-lg hover:bg-indigo-600 transition-colors active:scale-[0.98] disabled:opacity-50" title="Start a New Session for this Ticket">
-                                <Repeat className="w-4 w-4" /><span>Start New Session</span>
-                            </button>
-                        </>
-                    )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Compact Sessions List */}
+                  <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
+                      <div key={session.id} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div className="flex items-center gap-3 flex-grow min-w-0">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select session ${session.id}`}
+                            checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
+                            onChange={() => handleToggleSelectSession(session.id)}
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                          />
+                          
+                          <div className="flex items-center gap-2 min-w-0 flex-grow">
+                            {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500 flex-shrink-0" title="Submitted"/>}
+                            <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              {formatTime(session.accumulatedMs)}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                              {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                            {session.note && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0">
+                                <BookOpen className="h-3 w-3 inline mr-1"/>
+                                {session.note}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button 
+                            onClick={() => {
+                              setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
+                              setIsReallocateModalOpen(true);
+                            }} 
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                            title="Reallocate Session"
+                          >
+                            <CornerUpRight className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteClick(session)} 
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Delete Session"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <ul className="pl-3 space-y-2 mt-2 border-l-2 border-gray-300 dark:border-gray-600">
-                    {group.sessions.sort((a, b) => b.endTime - a.endTime).map((session) => (
-                        <li key={session.id} className="text-xs text-gray-700 dark:text-gray-300 flex flex-col pt-1 pb-1">
-                            <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        aria-label={`Select session ${session.id}`}
-                                        checked={selectedTickets.has(group.ticketId) || selectedSessions.has(session.id)}
-                                        onChange={() => handleToggleSelectSession(session.id)}
-                                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    {session.status === 'submitted' && <Check className="h-4 w-4 text-green-500" title="Submitted"/>}
-                                    <span className={`font-mono font-bold text-sm flex-shrink-0 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{formatTime(session.accumulatedMs)}</span>
-                                </div>
-                                <span className="text-gray-500 dark:text-gray-400 text-right text-xs flex-grow">{new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                <button 
-                                    onClick={() => {
-                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
-                                        setIsReallocateModalOpen(true);
-                                    }} 
-                                    className="p-1 text-gray-400 hover:text-indigo-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Reallocate Session">
-                                    <CornerUpRight className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => handleDeleteClick(session)} className="p-1 text-red-400 hover:text-red-600 rounded-full transition-colors active:scale-95 disabled:opacity-50" title="Delete Session">
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </div>
-                            {session.note && (
-                                <p className={`mt-1 flex items-start text-xs border-t border-gray-200 dark:border-gray-600 pt-1 ${session.status === 'submitted' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                                    <BookOpen className="h-3 w-3 mr-1 text-indigo-400 dark:text-indigo-500 flex-shrink-0 mt-[2px]"/>
-                                    <span className="italic break-words">{session.note}</span>
-                                </p>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-              </li>
-              )
+              );
             })}
-          </ul>
+          </div>
         </section>
       </div>
     </div>
