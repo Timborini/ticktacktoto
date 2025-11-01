@@ -2938,7 +2938,7 @@ ${combinedReport.trim()}
                             </div>
                             {/* Session Actions */}
                             {group.sessions.length > 0 && (
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex flex-col items-center gap-1">
                                 {group.sessions.map(session => (
                                   <div key={session.id} className="flex items-center gap-1">
                                     <button 
