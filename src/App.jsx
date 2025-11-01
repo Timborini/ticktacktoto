@@ -2266,11 +2266,11 @@ ${combinedReport.trim()}
                 <button
                   onClick={() => stopTimer(false)}
                   disabled={isStopButtonDisabled}
-                  title="Stop and Finalize Activity"
+                  title="Stop Activity"
                   className={`w-full flex items-center justify-center space-x-2 py-3 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Square className="h-5 w-5" />
-                  <span>Stop & Finalize</span>
+                  <span>Stop</span>
                 </button>
               </div>
 
@@ -2938,7 +2938,7 @@ ${combinedReport.trim()}
                             </div>
                             {/* Session Actions */}
                             {group.sessions.length > 0 && (
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex flex-col items-center gap-1">
                                 {group.sessions.map(session => (
                                   <div key={session.id} className="flex items-center gap-1">
                                     <button 
