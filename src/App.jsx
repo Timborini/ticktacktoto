@@ -930,7 +930,12 @@ const App = () => {
       setHasLoadedOnce(true);
     }, (error) => {
       console.error('Firestore snapshot error:', error);
-      setFirebaseError('Failed to load real-time data. Check console.');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Collection path:', getCollectionRef?.path);
+      console.error('User ID:', userId);
+      console.error('App ID:', appId);
+      setFirebaseError(`Failed to load real-time data: ${error.code || error.message}. Check console for details.`);
       setIsLoading(false);
       setHasLoadedOnce(true);
     });

@@ -44,20 +44,32 @@ service cloud.firestore {
     
     // User-specific data paths
     match /artifacts/{appId}/users/{userId}/time_entries/{entryId} {
-      // Users can read and write only their own time entries
-      allow read, create, update, delete: if request.auth != null && 
-                                            request.auth.uid == userId &&
-                                            validTimeEntry(request.resource.data);
+      // Users can read their own time entries
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can write their own time entries with valid data
+      allow create, update: if request.auth != null && 
+                            request.auth.uid == userId &&
+                            validTimeEntry(request.resource.data);
+      
+      // Users can delete their own time entries
+      allow delete: if request.auth != null && request.auth.uid == userId;
       
       // Rate limiting: Max 100 writes per minute per user (requires Firebase extensions)
       // Note: This is a simplified check - implement proper rate limiting with Cloud Functions
     }
     
     match /artifacts/{appId}/users/{userId}/ticket_statuses/{statusId} {
-      // Users can read and write only their own ticket statuses
-      allow read, create, update, delete: if request.auth != null && 
-                                            request.auth.uid == userId &&
-                                            validTicketStatus(request.resource.data);
+      // Users can read their own ticket statuses
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can write their own ticket statuses with valid data
+      allow create, update: if request.auth != null && 
+                            request.auth.uid == userId &&
+                            validTicketStatus(request.resource.data);
+      
+      // Users can delete their own ticket statuses
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
     // Public/shared data paths (read-only)
