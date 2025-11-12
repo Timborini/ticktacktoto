@@ -851,8 +851,17 @@ const App = () => {
 
   // --- Real-time Log Listener (onSnapshot) ---
   useEffect(() => {
-    if (!isAuthReady || !getCollectionRef) return;
+    if (!isAuthReady || !getCollectionRef || !userId || !user) {
+      console.log('Waiting for auth:', { isAuthReady, hasCollectionRef: !!getCollectionRef, userId, hasUser: !!user });
+      return;
+    }
     
+    console.log('Setting up Firestore listener:', {
+      userId,
+      appId,
+      collectionPath: getCollectionRef.path,
+      isAuthenticated: !!user
+    });
     
     setIsLoading(true);
     const q = query(getCollectionRef);
@@ -935,13 +944,22 @@ const App = () => {
       console.error('Collection path:', getCollectionRef?.path);
       console.error('User ID:', userId);
       console.error('App ID:', appId);
-      setFirebaseError(`Failed to load real-time data: ${error.code || error.message}. Check console for details.`);
+      console.error('Is authenticated:', !!user);
+      console.error('Auth state:', { isAuthReady, userId, hasUser: !!user });
+      
+      let errorMessage = `Failed to load real-time data: ${error.code || error.message}`;
+      
+      if (error.code === 'permission-denied') {
+        errorMessage += '. This usually means: 1) Firestore security rules need to be deployed to Firebase, or 2) Anonymous authentication might not be enabled in Firebase Console. Please check the Firebase Console and deploy the updated firestore.rules file.';
+      }
+      
+      setFirebaseError(errorMessage);
       setIsLoading(false);
       setHasLoadedOnce(true);
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, getCollectionRef, runningLogDocId, userId]);
+  }, [isAuthReady, getCollectionRef, runningLogDocId, userId, user]);
 
   // --- Timer Interval Effect (Optimized) ---
   useEffect(() => {
@@ -1932,14 +1950,30 @@ ${combinedReport.trim()}
   }
 
   if (firebaseError) {
+    const isPermissionDenied = firebaseError.includes('permission-denied');
     return (
-      <div className="p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md mx-auto max-w-lg mt-8">
+      <div className="p-6 bg-red-100 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-lg shadow-md mx-auto max-w-2xl mt-8">
         <div className="flex items-center">
-          <AlertTriangle className="h-6 w-6 mr-3" />
+          <AlertTriangle className="h-6 w-6 mr-3 flex-shrink-0" />
           <h2 className="text-xl font-bold">Error</h2>
         </div>
-        <p className="mt-2 text-sm">{firebaseError}</p>
-        <p className="mt-2 text-xs">User ID: <span className='break-all'>{userId || 'N/A'}</span>. App ID: {appId}</p>
+        <p className="mt-2 text-sm whitespace-pre-line break-words">{firebaseError}</p>
+        {isPermissionDenied && (
+          <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+            <p className="text-sm font-semibold mb-2">Quick Fix Steps:</p>
+            <ol className="list-decimal list-inside space-y-1 text-sm">
+              <li>Go to <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Firebase Console</a></li>
+              <li>Select your project: <strong>{process.env.REACT_APP_FIREBASE_PROJECT_ID || 'your-project'}</strong></li>
+              <li>Navigate to Firestore Database → Rules</li>
+              <li>Copy the contents of <code className="bg-red-100 dark:bg-red-900/50 px-1 rounded">firestore.rules</code> from your project</li>
+              <li>Paste and click "Publish"</li>
+              <li>Verify Anonymous Authentication is enabled: Authentication → Sign-in method → Anonymous → Enable</li>
+            </ol>
+          </div>
+        )}
+        <p className="mt-4 text-xs text-red-600 dark:text-red-500">
+          User ID: <span className='break-all font-mono'>{userId || 'N/A'}</span>. App ID: <span className="font-mono">{appId}</span>
+        </p>
       </div>
     );
   }
