@@ -1553,8 +1553,6 @@ const App = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as JSON`);
       } else {
         // CSV Export
         const filename = `${reportName}-${today}.csv`;
@@ -1578,8 +1576,6 @@ const App = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as CSV`);
       }
     } catch (error) {
       console.error('Export Failed:', error);
@@ -1610,7 +1606,6 @@ const App = () => {
           });
         });
         await batch.commit();
-        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
       }
 
       // Now perform the export
