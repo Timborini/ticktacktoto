@@ -46,6 +46,7 @@ service cloud.firestore {
              (!('endTime' in data) || data.endTime == null || data.endTime is number) &&
              (!('note' in data) || validNote(data.note)) &&
              (!('status' in data) || data.status in ['submitted', 'unsubmitted']) &&
+             (!('submissionDate' in data) || data.submissionDate == null || data.submissionDate is number) &&
              (!('createdAt' in data) || data.createdAt is number);
     }
     
