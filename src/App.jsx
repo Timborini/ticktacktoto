@@ -1152,44 +1152,13 @@ const App = () => {
 
   const pauseTimer = useCallback(async () => {
     if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
-      console.warn('Cannot pause timer:', {
-        hasRunningLogDocId: !!runningLogDocId,
-        isTimerRunning,
-        hasCollectionRef: !!getCollectionRef,
-        hasActiveLogData: !!activeLogData
-      });
-      return;
-    }
-
-    // Validate that startTime exists and is a valid number
-    if (!activeLogData.startTime || typeof activeLogData.startTime !== 'number') {
-      console.error('Invalid startTime when pausing:', {
-        startTime: activeLogData.startTime,
-        activeLogData,
-        runningLogDocId
-      });
-      setFirebaseError('Cannot pause timer: Invalid start time.');
       return;
     }
 
     setIsLoading(true);
     const stopTime = Date.now();
-    const currentRunDuration = stopTime - activeLogData.startTime;
-    
-    // Validate duration is reasonable (not negative or impossibly large)
-    if (currentRunDuration < 0 || currentRunDuration > 86400000 * 30) { // Max 30 days
-      console.error('Invalid duration calculation:', {
-        currentRunDuration,
-        stopTime,
-        startTime: activeLogData.startTime,
-        difference: stopTime - activeLogData.startTime
-      });
-      setFirebaseError('Cannot pause timer: Invalid duration calculation.');
-      setIsLoading(false);
-      return;
-    }
-    
-    const newAccumulatedMs = (activeLogData.accumulatedMs || 0) + Math.max(0, currentRunDuration); 
+    const currentRunDuration = stopTime - activeLogData.startTime; 
+    const newAccumulatedMs = activeLogData.accumulatedMs + Math.max(0, currentRunDuration); 
 
     try {
       await updateDoc(doc(getCollectionRef, runningLogDocId), {
@@ -1199,16 +1168,7 @@ const App = () => {
       });
     } catch (error) {
       console.error('Error pausing timer:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        runningLogDocId,
-        hasCollectionRef: !!getCollectionRef,
-        startTime: activeLogData.startTime,
-        accumulatedMs: activeLogData.accumulatedMs,
-        newAccumulatedMs
-      });
-      setFirebaseError(`Failed to pause timer: ${error.message || error.code || 'Unknown error'}`);
+      setFirebaseError('Failed to pause timer.');
     } finally {
       setIsLoading(false);
     }
@@ -1216,49 +1176,17 @@ const App = () => {
 
 
   const stopTimer = useCallback(async (isAutoOverride = false) => {
-    if (!runningLogDocId || !getCollectionRef || !activeLogData) {
-      console.warn('Cannot stop timer:', {
-        hasRunningLogDocId: !!runningLogDocId,
-        hasCollectionRef: !!getCollectionRef,
-        hasActiveLogData: !!activeLogData
-      });
-      return;
-    }
+    if (!runningLogDocId || !getCollectionRef || !activeLogData) return;
 
     setIsLoading(true);
     const finalStopTime = Date.now();
-    let finalAccumulatedMs = activeLogData.accumulatedMs || 0; 
+    let finalAccumulatedMs = activeLogData.accumulatedMs; 
 
     if (isTimerRunning) {
-        // Validate startTime exists and is a valid number
-        if (!activeLogData.startTime || typeof activeLogData.startTime !== 'number') {
-          console.error('Invalid startTime when stopping timer:', {
-            startTime: activeLogData.startTime,
-            activeLogData,
-            runningLogDocId
-          });
-          setFirebaseError('Cannot stop timer: Invalid start time.');
-          setIsLoading(false);
-          return;
-        }
-        
         const currentRunDuration = finalStopTime - activeLogData.startTime;
-        
-        // Validate duration is reasonable
-        if (currentRunDuration < 0 || currentRunDuration > 86400000 * 30) {
-          console.error('Invalid duration calculation when stopping:', {
-            currentRunDuration,
-            finalStopTime,
-            startTime: activeLogData.startTime
-          });
-          setFirebaseError('Cannot stop timer: Invalid duration calculation.');
-          setIsLoading(false);
-          return;
-        }
-        
         finalAccumulatedMs += Math.max(1000, currentRunDuration); 
     } else if (isTimerPaused) {
-        finalAccumulatedMs = activeLogData.accumulatedMs || 0;
+        finalAccumulatedMs = activeLogData.accumulatedMs;
         if (finalAccumulatedMs < 1000) finalAccumulatedMs = 1000;
     }
 
@@ -1276,20 +1204,9 @@ const App = () => {
           setCurrentNote('');
       }
 
-    } catch (error) {
+    } catch (error)      {
       console.error('Error stopping timer:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        runningLogDocId,
-        hasCollectionRef: !!getCollectionRef,
-        isTimerRunning,
-        isTimerPaused,
-        startTime: activeLogData.startTime,
-        accumulatedMs: activeLogData.accumulatedMs,
-        finalAccumulatedMs
-      });
-      setFirebaseError(`Failed to stop timer: ${error.message || error.code || 'Unknown error'}`);
+      setFirebaseError('Failed to stop timer.');
     } finally {
       setIsLoading(false);
     }
@@ -1320,14 +1237,9 @@ const App = () => {
 
   const startOrResumeTimer = useCallback(async () => {
     if (!getCollectionRef || currentTicketId.trim() === '') {
-      console.warn('Cannot start/resume timer:', {
-        hasCollectionRef: !!getCollectionRef,
-        currentTicketId: currentTicketId.trim()
-      });
       return;
     }
     if (isTimerRunning) {
-      console.warn('Timer already running, cannot start/resume');
       return;
     }
 
@@ -1336,12 +1248,7 @@ const App = () => {
 
     try {
       if (isTimerPaused) {
-        if (!runningLogDocId) {
-          console.error('Paused log ID missing when resuming timer');
-          setFirebaseError('Cannot resume timer: Session ID missing.');
-          setIsLoading(false);
-          return;
-        }
+        if (!runningLogDocId) throw new Error("Paused log ID missing.");
         await updateDoc(doc(getCollectionRef, runningLogDocId), {
           startTime: startTimestamp,
           note: sanitizeNote(currentNote),
@@ -1351,15 +1258,7 @@ const App = () => {
       }
     } catch (error) {
       console.error('Error starting/resuming timer:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        isTimerPaused,
-        runningLogDocId,
-        hasCollectionRef: !!getCollectionRef,
-        currentTicketId
-      });
-      setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer: ${error.message || error.code || 'Unknown error'}`);
+      setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer.`);
     } finally {
       setIsLoading(false);
     }
@@ -1598,14 +1497,7 @@ const App = () => {
         finalSessionIds.add(sessionId);
     });
 
-    if (finalSessionIds.size === 0 || !getCollectionRef || !db) {
-      console.warn('Cannot mark as submitted:', {
-        sessionCount: finalSessionIds.size,
-        hasCollectionRef: !!getCollectionRef,
-        hasDb: !!db
-      });
-      return;
-    }
+    if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
 
     setIsLoading(true);
     const batch = writeBatch(db);
@@ -1624,13 +1516,7 @@ const App = () => {
         setExportedSessionIds(new Set()); // Clear exported session IDs
     } catch (error) {
         console.error("Error marking sessions as submitted:", error);
-        console.error("Error details:", {
-          message: error.message,
-          code: error.code,
-          sessionCount: finalSessionIds.size,
-          sessionIds: Array.from(finalSessionIds).slice(0, 5) // Log first 5 IDs
-        });
-        setFirebaseError(`Failed to mark sessions as submitted: ${error.message || error.code || 'Unknown error'}`);
+        setFirebaseError("Failed to mark sessions as submitted.");
     } finally {
         setIsLoading(false);
         setIsConfirmingSubmit(false);
@@ -1713,65 +1599,26 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      if (markAsSubmitted) {
-        // Check if there are any sessions to mark as submitted
-        if (exportedSessionIds.size === 0) {
-          console.warn('No sessions to mark as submitted');
-          // Still proceed with export even if no sessions to mark
-        } else {
-          // Filter to only mark completed sessions (those with endTime) as submitted
-          // Get the actual logs to verify they have endTime
-          const logsToMark = pendingExport.logs.filter(log => 
-            exportedSessionIds.has(log.id) && log.endTime !== null
-          );
-          
-          if (logsToMark.length === 0) {
-            console.warn('No completed sessions to mark as submitted');
-            // Still proceed with export
-          } else {
-            // Mark sessions as submitted
-            const batch = writeBatch(db);
-            const sessionIdsToMark = logsToMark.map(log => log.id);
-            
-            sessionIdsToMark.forEach(sessionId => {
-              if (!sessionId) {
-                console.warn('Skipping invalid session ID:', sessionId);
-                return;
-              }
-              try {
-                const sessionRef = doc(getCollectionRef, sessionId);
-                batch.update(sessionRef, {
-                  status: 'submitted',
-                  submissionDate: Date.now()
-                });
-              } catch (error) {
-                console.error(`Error adding session ${sessionId} to batch:`, error);
-                throw error; // Re-throw to be caught by outer catch
-              }
-            });
-            
-            if (sessionIdsToMark.length > 0) {
-              await batch.commit();
-              toast.success(`Marked ${sessionIdsToMark.length} session(s) as submitted`);
-            }
-          }
-        }
+      if (markAsSubmitted && exportedSessionIds.size > 0) {
+        // Mark sessions as submitted
+        const batch = writeBatch(db);
+        exportedSessionIds.forEach(sessionId => {
+          const sessionRef = doc(getCollectionRef, sessionId);
+          batch.update(sessionRef, {
+            status: 'submitted',
+            submissionDate: Date.now()
+          });
+        });
+        await batch.commit();
+        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
       }
 
       // Now perform the export
       performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
       
     } catch (error) {
-      console.error('Error in handleConfirmExport:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        db: !!db,
-        getCollectionRef: !!getCollectionRef,
-        exportedSessionIds: exportedSessionIds.size,
-        sessionIds: Array.from(exportedSessionIds)
-      });
-      setFirebaseError(`Failed to update submission status: ${error.message || error.code || 'Unknown error'}`);
+      console.error('Error:', error);
+      setFirebaseError('Failed to update submission status.');
       toast.error('Failed to update status');
     } finally {
       setIsConfirmingSubmit(false);
