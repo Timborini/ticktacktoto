@@ -1497,7 +1497,7 @@ const App = () => {
         finalSessionIds.add(sessionId);
     });
 
-    if (finalSessionIds.size === 0 || !getCollectionRef) return;
+    if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
 
     setIsLoading(true);
     const batch = writeBatch(db);
@@ -1507,7 +1507,7 @@ const App = () => {
             const docRef = doc(getCollectionRef, sessionId);
             batch.update(docRef, { 
               status: 'submitted',
-              submissionDate: new Date()
+              submissionDate: Date.now()
             });
         });
         await batch.commit();
@@ -1553,8 +1553,6 @@ const App = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as JSON`);
       } else {
         // CSV Export
         const filename = `${reportName}-${today}.csv`;
@@ -1578,8 +1576,6 @@ const App = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${logsToExport.length} entries as CSV`);
       }
     } catch (error) {
       console.error('Export Failed:', error);
@@ -1590,7 +1586,7 @@ const App = () => {
 
   // Handler for export confirmation with three options
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
-    if (!pendingExport || !getCollectionRef) {
+    if (!pendingExport || !getCollectionRef || !db) {
       setIsConfirmingSubmit(false);
       setPendingExport(null);
       return;
@@ -1599,7 +1595,7 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      if (markAsSubmitted) {
+      if (markAsSubmitted && exportedSessionIds.size > 0) {
         // Mark sessions as submitted
         const batch = writeBatch(db);
         exportedSessionIds.forEach(sessionId => {
@@ -1610,7 +1606,6 @@ const App = () => {
           });
         });
         await batch.commit();
-        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
       }
 
       // Now perform the export
