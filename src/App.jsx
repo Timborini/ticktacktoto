@@ -1152,13 +1152,44 @@ const App = () => {
 
   const pauseTimer = useCallback(async () => {
     if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
+      console.warn('Cannot pause timer:', {
+        hasRunningLogDocId: !!runningLogDocId,
+        isTimerRunning,
+        hasCollectionRef: !!getCollectionRef,
+        hasActiveLogData: !!activeLogData
+      });
+      return;
+    }
+
+    // Validate that startTime exists and is a valid number
+    if (!activeLogData.startTime || typeof activeLogData.startTime !== 'number') {
+      console.error('Invalid startTime when pausing:', {
+        startTime: activeLogData.startTime,
+        activeLogData,
+        runningLogDocId
+      });
+      setFirebaseError('Cannot pause timer: Invalid start time.');
       return;
     }
 
     setIsLoading(true);
     const stopTime = Date.now();
-    const currentRunDuration = stopTime - activeLogData.startTime; 
-    const newAccumulatedMs = activeLogData.accumulatedMs + Math.max(0, currentRunDuration); 
+    const currentRunDuration = stopTime - activeLogData.startTime;
+    
+    // Validate duration is reasonable (not negative or impossibly large)
+    if (currentRunDuration < 0 || currentRunDuration > 86400000 * 30) { // Max 30 days
+      console.error('Invalid duration calculation:', {
+        currentRunDuration,
+        stopTime,
+        startTime: activeLogData.startTime,
+        difference: stopTime - activeLogData.startTime
+      });
+      setFirebaseError('Cannot pause timer: Invalid duration calculation.');
+      setIsLoading(false);
+      return;
+    }
+    
+    const newAccumulatedMs = (activeLogData.accumulatedMs || 0) + Math.max(0, currentRunDuration); 
 
     try {
       await updateDoc(doc(getCollectionRef, runningLogDocId), {
@@ -1168,7 +1199,16 @@ const App = () => {
       });
     } catch (error) {
       console.error('Error pausing timer:', error);
-      setFirebaseError('Failed to pause timer.');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        runningLogDocId,
+        hasCollectionRef: !!getCollectionRef,
+        startTime: activeLogData.startTime,
+        accumulatedMs: activeLogData.accumulatedMs,
+        newAccumulatedMs
+      });
+      setFirebaseError(`Failed to pause timer: ${error.message || error.code || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -1176,17 +1216,49 @@ const App = () => {
 
 
   const stopTimer = useCallback(async (isAutoOverride = false) => {
-    if (!runningLogDocId || !getCollectionRef || !activeLogData) return;
+    if (!runningLogDocId || !getCollectionRef || !activeLogData) {
+      console.warn('Cannot stop timer:', {
+        hasRunningLogDocId: !!runningLogDocId,
+        hasCollectionRef: !!getCollectionRef,
+        hasActiveLogData: !!activeLogData
+      });
+      return;
+    }
 
     setIsLoading(true);
     const finalStopTime = Date.now();
-    let finalAccumulatedMs = activeLogData.accumulatedMs; 
+    let finalAccumulatedMs = activeLogData.accumulatedMs || 0; 
 
     if (isTimerRunning) {
+        // Validate startTime exists and is a valid number
+        if (!activeLogData.startTime || typeof activeLogData.startTime !== 'number') {
+          console.error('Invalid startTime when stopping timer:', {
+            startTime: activeLogData.startTime,
+            activeLogData,
+            runningLogDocId
+          });
+          setFirebaseError('Cannot stop timer: Invalid start time.');
+          setIsLoading(false);
+          return;
+        }
+        
         const currentRunDuration = finalStopTime - activeLogData.startTime;
+        
+        // Validate duration is reasonable
+        if (currentRunDuration < 0 || currentRunDuration > 86400000 * 30) {
+          console.error('Invalid duration calculation when stopping:', {
+            currentRunDuration,
+            finalStopTime,
+            startTime: activeLogData.startTime
+          });
+          setFirebaseError('Cannot stop timer: Invalid duration calculation.');
+          setIsLoading(false);
+          return;
+        }
+        
         finalAccumulatedMs += Math.max(1000, currentRunDuration); 
     } else if (isTimerPaused) {
-        finalAccumulatedMs = activeLogData.accumulatedMs;
+        finalAccumulatedMs = activeLogData.accumulatedMs || 0;
         if (finalAccumulatedMs < 1000) finalAccumulatedMs = 1000;
     }
 
@@ -1204,9 +1276,20 @@ const App = () => {
           setCurrentNote('');
       }
 
-    } catch (error)      {
+    } catch (error) {
       console.error('Error stopping timer:', error);
-      setFirebaseError('Failed to stop timer.');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        runningLogDocId,
+        hasCollectionRef: !!getCollectionRef,
+        isTimerRunning,
+        isTimerPaused,
+        startTime: activeLogData.startTime,
+        accumulatedMs: activeLogData.accumulatedMs,
+        finalAccumulatedMs
+      });
+      setFirebaseError(`Failed to stop timer: ${error.message || error.code || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -1237,9 +1320,14 @@ const App = () => {
 
   const startOrResumeTimer = useCallback(async () => {
     if (!getCollectionRef || currentTicketId.trim() === '') {
+      console.warn('Cannot start/resume timer:', {
+        hasCollectionRef: !!getCollectionRef,
+        currentTicketId: currentTicketId.trim()
+      });
       return;
     }
     if (isTimerRunning) {
+      console.warn('Timer already running, cannot start/resume');
       return;
     }
 
@@ -1248,7 +1336,12 @@ const App = () => {
 
     try {
       if (isTimerPaused) {
-        if (!runningLogDocId) throw new Error("Paused log ID missing.");
+        if (!runningLogDocId) {
+          console.error('Paused log ID missing when resuming timer');
+          setFirebaseError('Cannot resume timer: Session ID missing.');
+          setIsLoading(false);
+          return;
+        }
         await updateDoc(doc(getCollectionRef, runningLogDocId), {
           startTime: startTimestamp,
           note: sanitizeNote(currentNote),
@@ -1258,7 +1351,15 @@ const App = () => {
       }
     } catch (error) {
       console.error('Error starting/resuming timer:', error);
-      setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer.`);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        isTimerPaused,
+        runningLogDocId,
+        hasCollectionRef: !!getCollectionRef,
+        currentTicketId
+      });
+      setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer: ${error.message || error.code || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
