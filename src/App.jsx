@@ -1497,7 +1497,14 @@ const App = () => {
         finalSessionIds.add(sessionId);
     });
 
-    if (finalSessionIds.size === 0 || !getCollectionRef) return;
+    if (finalSessionIds.size === 0 || !getCollectionRef || !db) {
+      console.warn('Cannot mark as submitted:', {
+        sessionCount: finalSessionIds.size,
+        hasCollectionRef: !!getCollectionRef,
+        hasDb: !!db
+      });
+      return;
+    }
 
     setIsLoading(true);
     const batch = writeBatch(db);
@@ -1507,7 +1514,7 @@ const App = () => {
             const docRef = doc(getCollectionRef, sessionId);
             batch.update(docRef, { 
               status: 'submitted',
-              submissionDate: new Date()
+              submissionDate: Date.now()
             });
         });
         await batch.commit();
@@ -1516,7 +1523,13 @@ const App = () => {
         setExportedSessionIds(new Set()); // Clear exported session IDs
     } catch (error) {
         console.error("Error marking sessions as submitted:", error);
-        setFirebaseError("Failed to mark sessions as submitted.");
+        console.error("Error details:", {
+          message: error.message,
+          code: error.code,
+          sessionCount: finalSessionIds.size,
+          sessionIds: Array.from(finalSessionIds).slice(0, 5) // Log first 5 IDs
+        });
+        setFirebaseError(`Failed to mark sessions as submitted: ${error.message || error.code || 'Unknown error'}`);
     } finally {
         setIsLoading(false);
         setIsConfirmingSubmit(false);
@@ -1590,7 +1603,7 @@ const App = () => {
 
   // Handler for export confirmation with three options
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
-    if (!pendingExport || !getCollectionRef) {
+    if (!pendingExport || !getCollectionRef || !db) {
       setIsConfirmingSubmit(false);
       setPendingExport(null);
       return;
@@ -1600,25 +1613,64 @@ const App = () => {
     
     try {
       if (markAsSubmitted) {
-        // Mark sessions as submitted
-        const batch = writeBatch(db);
-        exportedSessionIds.forEach(sessionId => {
-          const sessionRef = doc(getCollectionRef, sessionId);
-          batch.update(sessionRef, {
-            status: 'submitted',
-            submissionDate: Date.now()
-          });
-        });
-        await batch.commit();
-        toast.success(`Marked ${exportedSessionIds.size} session(s) as submitted`);
+        // Check if there are any sessions to mark as submitted
+        if (exportedSessionIds.size === 0) {
+          console.warn('No sessions to mark as submitted');
+          // Still proceed with export even if no sessions to mark
+        } else {
+          // Filter to only mark completed sessions (those with endTime) as submitted
+          // Get the actual logs to verify they have endTime
+          const logsToMark = pendingExport.logs.filter(log => 
+            exportedSessionIds.has(log.id) && log.endTime !== null
+          );
+          
+          if (logsToMark.length === 0) {
+            console.warn('No completed sessions to mark as submitted');
+            // Still proceed with export
+          } else {
+            // Mark sessions as submitted
+            const batch = writeBatch(db);
+            const sessionIdsToMark = logsToMark.map(log => log.id);
+            
+            sessionIdsToMark.forEach(sessionId => {
+              if (!sessionId) {
+                console.warn('Skipping invalid session ID:', sessionId);
+                return;
+              }
+              try {
+                const sessionRef = doc(getCollectionRef, sessionId);
+                batch.update(sessionRef, {
+                  status: 'submitted',
+                  submissionDate: Date.now()
+                });
+              } catch (error) {
+                console.error(`Error adding session ${sessionId} to batch:`, error);
+                throw error; // Re-throw to be caught by outer catch
+              }
+            });
+            
+            if (sessionIdsToMark.length > 0) {
+              await batch.commit();
+              toast.success(`Marked ${sessionIdsToMark.length} session(s) as submitted`);
+            }
+          }
+        }
       }
 
       // Now perform the export
       performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
       
     } catch (error) {
-      console.error('Error:', error);
-      setFirebaseError('Failed to update submission status.');
+      console.error('Error in handleConfirmExport:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        db: !!db,
+        getCollectionRef: !!getCollectionRef,
+        exportedSessionIds: exportedSessionIds.size,
+        sessionIds: Array.from(exportedSessionIds)
+      });
+      setFirebaseError(`Failed to update submission status: ${error.message || error.code || 'Unknown error'}`);
       toast.error('Failed to update status');
     } finally {
       setIsConfirmingSubmit(false);
