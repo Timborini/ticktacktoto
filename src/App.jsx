@@ -928,7 +928,7 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, getCollectionRef, runningLogDocId]);
+  }, [isAuthReady, getCollectionRef, runningLogDocId, dateRangeStart, dateRangeEnd]);
 
   // --- Timer Interval Effect (Optimized) ---
   useEffect(() => {
