@@ -43,7 +43,9 @@ const ExportMenu = ({
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setFocusIndex((n) => n + 1);
+        // Bound focus index based on current view
+        const maxIndex = exportFormat ? 2 : 1; // scope view: 3 options (0..2), format view: 2 options (0..1)
+        setFocusIndex((n) => (n < maxIndex ? n + 1 : maxIndex));
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -52,7 +54,7 @@ const ExportMenu = ({
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClose, setFocusIndex]);
+  }, [isOpen, onClose, setFocusIndex, exportFormat]);
 
   useEffect(() => {
     if (!isOpen) {
