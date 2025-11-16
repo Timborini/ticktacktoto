@@ -110,20 +110,7 @@ const escapeCSV = (data) => {
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
     const confirmButtonRef = useRef(null);
 
-    // Focus management and Escape key handler
-    useEffect(() => {
-        if (isOpen) {
-            // Focus the confirm button when modal opens
-            setTimeout(() => confirmButtonRef.current?.focus(), 100);
-
-            // Handle Escape key
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onCancel();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
-        }
-    }, [isOpen, onCancel]);
+    // Focus and Escape are handled by ModalBase
 
     if (!isOpen) return null;
 
@@ -257,17 +244,7 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     const copyButtonRef = useRef(null);
 
-    useEffect(() => {
-        if (isOpen) {
-            setTimeout(() => copyButtonRef.current?.focus(), 100);
-
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onClose();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
-        }
-    }, [isOpen, onClose]);
+    // Focus and Escape are handled by ModalBase
 
     const copyToClipboard = async () => {
         if (!reportData?.text) return;
