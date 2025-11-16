@@ -37,23 +37,6 @@ const ExportMenu = ({
     previouslyFocusedRef.current = document.activeElement;
     const first = menuRef.current?.querySelector('button');
     if (first) setTimeout(() => first.focus(), 0);
-    const handleKey = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        // Bound focus index based on current view
-        const maxIndex = exportFormat ? 2 : 1; // scope view: 3 options (0..2), format view: 2 options (0..1)
-        setFocusIndex((n) => (n < maxIndex ? n + 1 : maxIndex));
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setFocusIndex((n) => (n > 0 ? n - 1 : 0));
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose, setFocusIndex, exportFormat]);
 
   useEffect(() => {
@@ -63,14 +46,60 @@ const ExportMenu = ({
     }
   }, [isOpen, buttonRef]);
 
+  const handleKey = (e) => {
+    // Prevent bubbling to any global handlers
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (exportFormat) {
+        onChooseFormat('');
+        setFocusIndex(0);
+      } else {
+        onClose();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      // Bound focus index based on current view
+      const maxIndex = exportFormat ? 2 : 1; // scope view: 3 options (0..2), format view: 2 options (0..1)
+      setFocusIndex((n) => (n < maxIndex ? n + 1 : maxIndex));
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusIndex((n) => (n > 0 ? n - 1 : 0));
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!exportFormat) {
+        const nextFormat = focusIndex === 0 ? 'csv' : 'json';
+        onChooseFormat(nextFormat);
+        setFocusIndex(0);
+      } else {
+        const scopes = ['selected', 'filtered', 'all'];
+        const scope = scopes[focusIndex] || 'selected';
+        const canMap = {
+          selected: canExportSelected,
+          filtered: canExportFiltered,
+          all: canExportAll,
+        };
+        if (canMap[scope]) {
+          onExportScope(scope);
+          onClose();
+        }
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div
       ref={menuRef}
-      className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
+      className="export-dropdown absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
       role="menu"
       aria-label="Export options"
+      onKeyDown={handleKey}
     >
       {!exportFormat ? (
         <>
