@@ -1371,15 +1371,23 @@ const App = () => {
 
   const handleBulkDelete = useCallback(async () => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
-    
+
     const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
     if (!confirmDelete) return;
 
-    await runAsync(async () => {
-      const deletePromises = Array.from(selectedSessions).map(sessionId => deleteDoc(doc(getCollectionRef, sessionId)));
-      await Promise.all(deletePromises);
-      setSelectedSessions(new Set());
-    }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
+    try {
+      setIsLoading(true);
+      await runAsync(async () => {
+        const deletePromises = Array.from(selectedSessions).map(sessionId => deleteDoc(doc(getCollectionRef, sessionId)));
+        await Promise.all(deletePromises);
+        setSelectedSessions(new Set());
+      }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
+    } catch (error) {
+      console.error('Error deleting sessions:', error);
+      setFirebaseError('Failed to delete some sessions.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [getCollectionRef, selectedSessions, runAsync]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
