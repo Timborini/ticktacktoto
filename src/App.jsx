@@ -15,6 +15,11 @@ import {
 
 // --- Toast Notifications ---
 import toast, { Toaster } from 'react-hot-toast';
+import ModalBase from './components/ModalBase.jsx';
+import ExportMenu from './components/ExportMenu.jsx';
+import { FixedSizeList as List } from 'react-window';
+import TicketRow from './components/TicketRow.jsx';
+import useAsyncAction from './utils/useAsyncAction.js';
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id'; 
@@ -126,49 +131,44 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
     const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4"
-            onClick={(e) => {
-                // Only close on backdrop click for non-destructive actions
-                if (e.target === e.currentTarget && confirmText !== "Delete") {
-                    onCancel();
-                }
-            }}
+        <ModalBase
+            isOpen={isOpen}
+            onClose={confirmText === "Delete" ? onCancel : onCancel}
+            labelledBy="modal-title"
+            describedBy="modal-description"
+            initialFocusRef={confirmButtonRef}
+            sizeClass="max-w-sm"
+            backdropCanClose={confirmText !== "Delete"}
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="modal-title"
-                aria-describedby="modal-description"
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
-                onClick={(e) => e.stopPropagation()}
+            <h3 
+                id="modal-title"
+                className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
             >
-                <h3 
-                    id="modal-title"
-                    className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
+                {title}
+            </h3>
+            <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
+            <div className="flex justify-end space-x-3">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Cancel"
                 >
-                    {title}
-                </h3>
-                <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
-                <div className="flex justify-end space-x-3">
-                    <button
-                        onClick={onCancel}
-                        className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                    >
-                        <X className="w-4 h-4" />
-                        <span>Cancel</span>
-                    </button>
-                    <button
-                        ref={confirmButtonRef}
-                        onClick={onConfirm}
-                        className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
-                    >
-                        <Check className="w-4 h-4" />
-                        <span>{confirmText}</span>
-                    </button>
-                </div>
+                    <X className="w-4 h-4" />
+                    <span>Cancel</span>
+                </button>
+                <button
+                    type="button"
+                    ref={confirmButtonRef}
+                    onClick={onConfirm}
+                    className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
+                    aria-label={confirmText}
+                >
+                    <Check className="w-4 h-4" />
+                    <span>{confirmText}</span>
+                </button>
             </div>
-        </div>
+        </ModalBase>
     );
 };
 
@@ -177,20 +177,10 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const selectRef = useRef(null);
 
     useEffect(() => {
-        // Reset selection when modal opens or session changes
         if (isOpen) {
             setNewTicketId('');
-            // Focus the select element when modal opens
-            setTimeout(() => selectRef.current?.focus(), 100);
-
-            // Handle Escape key
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onClose();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
         }
-    }, [isOpen, sessionInfo, onClose]);
+    }, [isOpen, sessionInfo]);
 
     if (!isOpen || !sessionInfo) return null;
 
@@ -205,66 +195,63 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
+        <ModalBase
+            isOpen={isOpen && !!sessionInfo}
+            onClose={onClose}
+            labelledBy="reallocate-title"
+            describedBy="reallocate-description"
+            initialFocusRef={selectRef}
+            sizeClass="max-w-md"
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="reallocate-title"
-                aria-describedby="reallocate-description"
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
-                    Reallocate Session
-                </h3>
-                <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                    Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
-                </p>
+            <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                Reallocate Session
+            </h3>
+            <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                Move this session from <strong className="font-mono text-indigo-500">{sessionInfo?.currentTicketId}</strong> to another ticket.
+            </p>
 
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            New Ticket ID
-                        </label>
-                        <select
-                            ref={selectRef}
-                            id="ticket-reallocate"
-                            value={newTicketId}
-                            onChange={(e) => setNewTicketId(e.target.value)}
-                            className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="" disabled>Select a ticket...</option>
-                            {availableTickets.map(ticketId => (
-                                <option key={ticketId} value={ticketId}>{ticketId}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                
-                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+            <div className="space-y-4">
+                <div>
+                    <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        New Ticket ID
+                    </label>
+                    <select
+                        ref={selectRef}
+                        id="ticket-reallocate"
+                        value={newTicketId}
+                        onChange={(e) => setNewTicketId(e.target.value)}
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                     >
-                        <X className="w-4 h-4" />
-                        <span>Cancel</span>
-                    </button>
-                    <button
-                        onClick={handleConfirm}
-                        disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
-                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Check className="w-4 h-4" />
-                        <span>Confirm Reallocation</span>
-                    </button>
+                        <option value="" disabled>Select a ticket...</option>
+                        {availableTickets.map(ticketId => (
+                            <option key={ticketId} value={ticketId}>{ticketId}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
-        </div>
+            
+            <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Cancel"
+                >
+                    <X className="w-4 h-4" />
+                    <span>Cancel</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={!newTicketId || newTicketId === sessionInfo?.currentTicketId}
+                    className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Confirm Reallocation"
+                >
+                    <Check className="w-4 h-4" />
+                    <span>Confirm Reallocation</span>
+                </button>
+            </div>
+        </ModalBase>
     );
 };
 
@@ -283,64 +270,58 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
         }
     }, [isOpen, onClose]);
 
-    if (!isOpen) return null;
-
-    const copyToClipboard = () => {
-        if (reportData?.text) {
-            const tempInput = document.createElement('textarea');
-            tempInput.value = reportData.text;
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempInput);
-            toast.success('Copied to clipboard!');
+    const copyToClipboard = async () => {
+        try {
+            if (reportData?.text && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(reportData.text);
+                toast.success('Copied to clipboard!');
+            }
+        } catch {
+            toast.error('Copy failed');
         }
     };
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
+        <ModalBase
+            isOpen={isOpen}
+            onClose={onClose}
+            labelledBy="report-title"
+            describedBy="report-description"
+            initialFocusRef={copyButtonRef}
+            sizeClass="max-w-xl"
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="report-title"
-                aria-describedby="report-description"
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
-                    <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
-                </h3>
-                <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                    Copy this prompt and paste it into your preferred AI chat application.
-                </p>
-                
-                <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
-                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
-                </div>
-                <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-                    <button
-                        ref={copyButtonRef}
-                        onClick={copyToClipboard}
-                        disabled={!reportData?.text}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Clipboard className="w-4 h-4" />
-                        <span>Copy to Clipboard</span>
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                    >
-                        Close
-                    </button>
-                </div>
+            <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
+            </h3>
+            <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                Copy this prompt and paste it into your preferred AI chat application.
+            </p>
+            
+            <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
+                <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
             </div>
-        </div>
+            <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                <button
+                    type="button"
+                    ref={copyButtonRef}
+                    onClick={copyToClipboard}
+                    disabled={!reportData?.text}
+                    className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Copy to Clipboard"
+                >
+                    <Clipboard className="w-4 h-4" />
+                    <span>Copy to Clipboard</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Close"
+                >
+                    Close
+                </button>
+            </div>
+        </ModalBase>
     );
 };
 
@@ -855,7 +836,18 @@ const App = () => {
     
     
     setIsLoading(true);
-    const q = query(getCollectionRef);
+    const constraints = [];
+    try {
+      if (dateRangeStart) {
+        const startMs = new Date(dateRangeStart).getTime();
+        if (!Number.isNaN(startMs)) constraints.push(where('endTime', '>=', startMs));
+      }
+      if (dateRangeEnd) {
+        const endMs = new Date(dateRangeEnd).getTime() + (24 * 60 * 60 * 1000 - 1);
+        if (!Number.isNaN(endMs)) constraints.push(where('endTime', '<=', endMs));
+      }
+    } catch {}
+    const q = constraints.length ? query(getCollectionRef, ...constraints) : query(getCollectionRef);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedLogs = [];
@@ -1357,27 +1349,19 @@ const App = () => {
   }, []);
 
   // --- Bulk Operations ---
+  const [runAsync, isAsyncLoading] = useAsyncAction('Failed to perform action');
+
   const handleBulkDelete = useCallback(async () => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
     
     const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
     if (!confirmDelete) return;
 
-    setIsLoading(true);
-    try {
-      const deletePromises = Array.from(selectedSessions).map(sessionId =>
-        deleteDoc(doc(getCollectionRef, sessionId))
-      );
+    await runAsync(async () => {
+      const deletePromises = Array.from(selectedSessions).map(sessionId => deleteDoc(doc(getCollectionRef, sessionId)));
       await Promise.all(deletePromises);
       setSelectedSessions(new Set());
-      toast.success(`Successfully deleted ${selectedSessions.size} session(s)`);
-    } catch (error) {
-      console.error('Error deleting sessions:', error);
-      setFirebaseError('Failed to delete some sessions.');
-      toast.error('Failed to delete some sessions');
-    } finally {
-      setIsLoading(false);
-    }
+    }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
   }, [getCollectionRef, selectedSessions]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
@@ -1943,8 +1927,9 @@ ${combinedReport.trim()}
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+        <div className="max-w-screen-xl mx-auto px-2 sm:px-4">
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -2595,100 +2580,22 @@ ${combinedReport.trim()}
                 </button>
                 
                 {exportOption === 'menu' && (
-                  <div 
-                    ref={exportMenuRef}
-                    className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
-                    role="menu"
-                    aria-label="Export options"
-                  >
-                    {!exportFormat ? (
-                      <>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                          Choose Format
-                        </div>
-                        <button
-                          onClick={() => {
-                            setExportFormat('csv');
-                            setExportFocusIndex(0);
-                          }}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          <span className="text-xl">📄</span>
-                          <span className="font-medium">CSV</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExportFormat('json');
-                            setExportFocusIndex(0);
-                          }}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          <span className="text-xl">📋</span>
-                          <span className="font-medium">JSON</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                          <span>Choose Scope</span>
-                          <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
-                            {exportFormat.toUpperCase()}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
-                        >
-                          <ChevronLeft className="h-3 w-3" />
-                          Back to format
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('selected', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={isActionDisabled}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          Selected
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('filtered', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={filteredAndGroupedLogs.length === 0}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          Filtered
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('all', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={logs.length === 0}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          All Data
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  <ExportMenu
+                    isOpen={exportOption === 'menu'}
+                    onClose={() => { setExportOption(''); setExportFormat(''); setExportFocusIndex(0); }}
+                    buttonRef={exportButtonRef}
+                    onChooseFormat={(fmt) => { setExportFormat(fmt); setExportFocusIndex(0); }}
+                    onExportScope={(scope) => {
+                      handleExport(scope, exportFormat);
+                      setExportOption(''); setExportFormat(''); setExportFocusIndex(0);
+                    }}
+                    canExportSelected={!isActionDisabled}
+                    canExportFiltered={filteredAndGroupedLogs.length > 0}
+                    canExportAll={logs.length > 0}
+                    exportFormat={exportFormat}
+                    focusIndex={exportFocusIndex}
+                    setFocusIndex={setExportFocusIndex}
+                  />
                 )}
               </div>
             </div>
@@ -2732,9 +2639,43 @@ ${combinedReport.trim()}
             </div>
           )}
 
-          {/* Compact Table Layout */}
+          {/* Compact Table Layout (virtualize when many rows) */}
           <div className="overflow-x-auto pt-4">
-            <table className="w-full border-collapse table-fixed" style={{minWidth: '600px'}}>
+            {filteredAndGroupedLogs.length > 100 ? (
+              <div className="min-w-[42rem] md:min-w-[56rem]">
+                <div className="grid grid-cols-[12rem,8rem,6rem,6rem,12rem] gap-2 px-2 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <div>Ticket ID</div>
+                  <div className="text-right">Total</div>
+                  <div className="text-center">Sessions</div>
+                  <div className="text-center">Status</div>
+                  <div className="text-center">Actions</div>
+                </div>
+                <List height={480} itemCount={filteredAndGroupedLogs.length} itemSize={72} width={'100%'}>
+                  {({ index, style }) => {
+                    const group = filteredAndGroupedLogs[index];
+                    const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
+                    return (
+                      <div style={style} className="px-2 flex items-center border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex-1 min-w-0 grid grid-cols-[12rem,8rem,6rem,6rem,12rem] gap-2 items-center">
+                          <div className="min-w-0 truncate text-indigo-700 dark:text-indigo-300 font-bold">{group.ticketId}</div>
+                          <div className="text-right font-mono font-bold">{formatTime(group.totalDurationMs)}</div>
+                          <div className="text-center text-sm text-gray-600 dark:text-gray-400">{group.sessions.length}</div>
+                          <div className="text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${group.isClosed ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'}`}>
+                              {group.isClosed ? 'Closed' : 'Open'}
+                            </span>
+                          </div>
+                          <div className="text-center">
+                            <button type="button" onClick={() => handleContinueTicket(group.ticketId)} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700" aria-label="Start New Session">Start</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                </List>
+              </div>
+            ) : (
+            <table className="w-full border-collapse table-fixed min-w-[42rem] md:min-w-[56rem]">
               {/* Table Header */}
               <thead>
                 <tr className="border-b-2 border-gray-200 dark:border-gray-700">
@@ -2759,216 +2700,37 @@ ${combinedReport.trim()}
               <tbody>
                 {filteredAndGroupedLogs.map((group) => {
                   const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
-                  
                   return (
-                    <React.Fragment key={group.ticketId}>
-                      {/* Main Ticket Row */}
-                      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <td className="py-3 px-2">
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ticket ${group.ticketId}`}
-                            checked={selectedTickets.has(group.ticketId)}
-                            onChange={() => handleToggleSelectTicket(group.ticketId)}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
-                          />
-                        </td>
-                        
-                        <td className="py-3 px-2">
-                          <div className="flex flex-col gap-2 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {editingTicketId === group.ticketId ? (
-                                <input
-                                  type="text"
-                                  value={editingTicketValue}
-                                  onChange={(e) => setEditingTicketValue(e.target.value)}
-                                  onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      handleUpdateTicketId(group.ticketId, editingTicketValue);
-                                    } else if (e.key === 'Escape') {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      setEditingTicketId(null);
-                                    }
-                                  }}
-                                  className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-1"
-                                  autoFocus
-                                />
-                              ) : (
-                                <>
-                                  <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-1">
-                                    {group.ticketId}
-                                  </span>
-                                  {isFullySubmitted && <Check className="w-4 h-4 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
-                                  <button 
-                                    onClick={() => {
-                                      setEditingTicketId(group.ticketId);
-                                      setEditingTicketValue(group.ticketId);
-                                    }}
-                                    className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
-                                    title="Edit Ticket ID"
-                                  >
-                                    <Pencil className="w-3 h-3" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                            {/* Session Notes under Ticket ID */}
-                            {group.sessions.length > 0 && (
-                              <div className="space-y-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 min-w-0">
-                                    <BookOpen className="h-3 w-3 flex-shrink-0"/>
-                                    {editingSessionNote === session.id ? (
-                                      <input
-                                        type="text"
-                                        value={editingSessionNoteValue}
-                                        onChange={(e) => setEditingSessionNoteValue(e.target.value)}
-                                        onBlur={() => handleUpdateSessionNote(session.id, editingSessionNoteValue)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            handleUpdateSessionNote(session.id, editingSessionNoteValue);
-                                          } else if (e.key === 'Escape') {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            setEditingSessionNote(null);
-                                            setEditingSessionNoteValue('');
-                                          }
-                                        }}
-                                        placeholder="Add session note..."
-                                        maxLength={5000}
-                                        className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-1"
-                                        autoFocus
-                                      />
-                                    ) : (
-                                      <>
-                                        <span className="truncate flex-1">{session.note || 'No notes'}</span>
-                                        <button 
-                                          onClick={() => {
-                                            setEditingSessionNote(session.id);
-                                            setEditingSessionNoteValue(session.note || '');
-                                          }}
-                                          className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
-                                          title="Edit Session Note"
-                                        >
-                                          <Pencil className="w-3 h-3" />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="font-mono font-bold text-indigo-800 dark:text-indigo-200 whitespace-nowrap">
-                              {formatTime(group.totalDurationMs)}
-                            </span>
-                            {/* Individual session times and dates */}
-                            {group.sessions.length > 0 && (
-                              <div className="space-y-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                    {formatTime(session.accumulatedMs)} • {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {group.sessions.length}
-                          </span>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            group.isClosed 
-                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
-                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                          }`}>
-                            {group.isClosed ? 'Closed' : 'Open'}
-                          </span>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="flex items-center justify-center gap-1">
-                              {group.isClosed ? (
-                                <button 
-                                  onClick={() => handleReopenTicket(group.ticketId)} 
-                                  className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                                  title="Reopen Ticket"
-                                >
-                                  <Repeat className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <>
-                                  <button 
-                                    onClick={() => handleCloseTicket(group.ticketId)} 
-                                    className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                    title="Close Ticket"
-                                  >
-                                    <Lock className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleContinueTicket(group.ticketId)} 
-                                    className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                                    title="Start New Session"
-                                  >
-                                    <Repeat className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                            {/* Session Actions */}
-                            {group.sessions.length > 0 && (
-                              <div className="flex flex-col items-center gap-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="flex items-center gap-1">
-                                    <button 
-                                      onClick={() => {
-                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
-                                        setIsReallocateModalOpen(true);
-                                      }} 
-                                      className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                                      title="Reallocate Session"
-                                    >
-                                      <CornerUpRight className="h-3 w-3" />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteClick(session)} 
-                                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                      title="Delete Session"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      
-                    </React.Fragment>
+                    <TicketRow
+                      key={group.ticketId}
+                      group={group}
+                      isSelected={selectedTickets.has(group.ticketId)}
+                      onToggleSelectTicket={handleToggleSelectTicket}
+                      isFullySubmitted={isFullySubmitted}
+                      onReopenTicket={handleReopenTicket}
+                      onCloseTicket={handleCloseTicket}
+                      onContinueTicket={handleContinueTicket}
+                      editingTicketId={editingTicketId}
+                      editingTicketValue={editingTicketValue}
+                      setEditingTicketId={setEditingTicketId}
+                      setEditingTicketValue={setEditingTicketValue}
+                      handleUpdateTicketId={handleUpdateTicketId}
+                      sessions={group.sessions}
+                      editingSessionNote={editingSessionNote}
+                      editingSessionNoteValue={editingSessionNoteValue}
+                      setEditingSessionNote={setEditingSessionNote}
+                      setEditingSessionNoteValue={setEditingSessionNoteValue}
+                      handleUpdateSessionNote={handleUpdateSessionNote}
+                      handleDeleteClick={handleDeleteClick}
+                    />
                   );
                 })}
               </tbody>
             </table>
+            )}
           </div>
         </section>
-      </div>
+        </div>
     </div>
   );
 };
