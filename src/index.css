@@ -51,8 +51,16 @@
   --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
 
-/* Global smooth transitions for theme switching */
-* {
+/* Scoped transitions for interactive elements (avoid global *) */
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger,
+.input,
+.card,
+.modal-content,
+button,
+a {
   transition-property: background-color, border-color, color, fill, stroke;
   transition-duration: 200ms;
   transition-timing-function: ease-in-out;
@@ -60,7 +68,15 @@
 
 /* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
-  * {
+  .btn-primary,
+  .btn-secondary,
+  .btn-success,
+  .btn-danger,
+  .input,
+  .card,
+  .modal-content,
+  button,
+  a {
     transition-duration: 0ms;
   }
 }
