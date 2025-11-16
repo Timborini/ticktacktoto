@@ -1299,9 +1299,9 @@ const App = () => {
   }, [startNewOrOverride]);
   
   const handleCloseTicket = useCallback(async (ticketId) => {
-    if (!getTicketStatusCollectionRef || isLoading) return;
+    if (!getTicketStatusCollectionRef) return;
 
-    setIsLoading(true);
+    const loadingToast = toast.loading('Closing ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
     try {
@@ -1313,31 +1313,35 @@ const App = () => {
                 isClosed: true,
             });
         }
+        toast.success('Ticket closed', { id: loadingToast });
     } catch (error) {
         console.error('Error closing ticket:', error);
         setFirebaseError(`Failed to close ticket ${ticketId}.`);
+        toast.error('Failed to close ticket', { id: loadingToast });
     } finally {
-        setIsLoading(false);
+        toast.dismiss(loadingToast);
     }
-  }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses]);
   
   const handleReopenTicket = useCallback(async (ticketId) => {
-    if (!getTicketStatusCollectionRef || isLoading) return;
+    if (!getTicketStatusCollectionRef) return;
 
-    setIsLoading(true);
+    const loadingToast = toast.loading('Reopening ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
     try {
         if (statusEntry && statusEntry.id) {
             await updateDoc(doc(getTicketStatusCollectionRef, statusEntry.id), { isClosed: false });
         }
+        toast.success('Ticket reopened', { id: loadingToast });
     } catch (error) {
         console.error('Error reopening ticket:', error);
         setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
+        toast.error('Failed to reopen ticket', { id: loadingToast });
     } finally {
-        setIsLoading(false);
+        toast.dismiss(loadingToast);
     }
-  }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses]);
 
   const handleDeleteClick = useCallback((session) => {
     setLogToDelete(session);
