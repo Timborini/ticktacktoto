@@ -17,7 +17,7 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import ModalBase from './components/ModalBase.jsx';
 import ExportMenu from './components/ExportMenu.jsx';
-import { FixedSizeList as List } from 'react-window';
+import { FixedSizeList as VirtualList } from 'react-window';
 import TicketRow from './components/TicketRow.jsx';
 import useAsyncAction from './utils/useAsyncAction.js';
 
@@ -2650,7 +2650,7 @@ ${combinedReport.trim()}
                   <div className="text-center">Status</div>
                   <div className="text-center">Actions</div>
                 </div>
-                <List height={480} itemCount={filteredAndGroupedLogs.length} itemSize={72} width={'100%'}>
+                <VirtualList height={480} itemCount={filteredAndGroupedLogs.length} itemSize={72} width={'100%'}>
                   {({ index, style }) => {
                     const group = filteredAndGroupedLogs[index];
                     const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
@@ -2672,7 +2672,7 @@ ${combinedReport.trim()}
                       </div>
                     );
                   }}
-                </List>
+                </VirtualList>
               </div>
             ) : (
             <table className="w-full border-collapse table-fixed min-w-[42rem] md:min-w-[56rem]">
