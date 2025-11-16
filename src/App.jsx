@@ -271,10 +271,29 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     }, [isOpen, onClose]);
 
     const copyToClipboard = async () => {
+        if (!reportData?.text) return;
         try {
-            if (reportData?.text && navigator.clipboard?.writeText) {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                 await navigator.clipboard.writeText(reportData.text);
                 toast.success('Copied to clipboard!');
+                return;
+            }
+        } catch {}
+        // Fallback method
+        try {
+            const tempInput = document.createElement('textarea');
+            tempInput.value = reportData.text;
+            tempInput.setAttribute('readonly', '');
+            tempInput.style.position = 'absolute';
+            tempInput.style.left = '-9999px';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            if (successful) {
+                toast.success('Copied to clipboard!');
+            } else {
+                toast.error('Copy failed');
             }
         } catch {
             toast.error('Copy failed');
@@ -1929,7 +1948,6 @@ ${combinedReport.trim()}
 
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
-        <div className="max-w-screen-xl mx-auto px-2 sm:px-4">
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -2052,7 +2070,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="max-w-screen-xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
@@ -2710,6 +2728,10 @@ ${combinedReport.trim()}
                       onReopenTicket={handleReopenTicket}
                       onCloseTicket={handleCloseTicket}
                       onContinueTicket={handleContinueTicket}
+                      onReallocateSession={(sessionId, ticketId) => {
+                        setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });
+                        setIsReallocateModalOpen(true);
+                      }}
                       editingTicketId={editingTicketId}
                       editingTicketValue={editingTicketValue}
                       setEditingTicketId={setEditingTicketId}
@@ -2730,7 +2752,7 @@ ${combinedReport.trim()}
             )}
           </div>
         </section>
-        </div>
+    </div>
     </div>
   );
 };

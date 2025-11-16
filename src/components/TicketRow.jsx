@@ -10,6 +10,7 @@ const TicketRow = memo(function TicketRow({
   onReopenTicket,
   onCloseTicket,
   onContinueTicket,
+  onReallocateSession,
   editingTicketId,
   editingTicketValue,
   setEditingTicketId,
@@ -210,9 +211,7 @@ const TicketRow = memo(function TicketRow({
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      onContinueTicket(group.ticketId)
-                    }
+                    onClick={() => onReallocateSession(session.id, group.ticketId)}
                     className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
                     title="Reallocate Session"
                     aria-label="Reallocate Session"
