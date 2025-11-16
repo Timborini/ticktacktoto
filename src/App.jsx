@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw, ChevronLeft
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Download, Lock, Send, Clipboard, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -10,11 +10,15 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore, collection, query, onSnapshot,
-  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
+  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch, setDoc
 } from 'firebase/firestore';
 
 // --- Toast Notifications ---
 import toast, { Toaster } from 'react-hot-toast';
+import ModalBase from './components/ModalBase.jsx';
+import ExportMenu from './components/ExportMenu.jsx';
+import TicketRow from './components/TicketRow.jsx';
+import useAsyncAction from './utils/useAsyncAction.js';
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
 const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id'; 
@@ -106,69 +110,51 @@ const escapeCSV = (data) => {
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
     const confirmButtonRef = useRef(null);
 
-    // Focus management and Escape key handler
-    useEffect(() => {
-        if (isOpen) {
-            // Focus the confirm button when modal opens
-            setTimeout(() => confirmButtonRef.current?.focus(), 100);
-
-            // Handle Escape key
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onCancel();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
-        }
-    }, [isOpen, onCancel]);
+    // Focus and Escape are handled by ModalBase
 
     if (!isOpen) return null;
 
     const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4"
-            onClick={(e) => {
-                // Only close on backdrop click for non-destructive actions
-                if (e.target === e.currentTarget && confirmText !== "Delete") {
-                    onCancel();
-                }
-            }}
+        <ModalBase
+            isOpen={isOpen}
+            onClose={confirmText === "Delete" ? onCancel : onCancel}
+            labelledBy="modal-title"
+            describedBy="modal-description"
+            initialFocusRef={confirmButtonRef}
+            sizeClass="max-w-sm"
+            backdropCanClose={confirmText !== "Delete"}
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="modal-title"
-                aria-describedby="modal-description"
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100" 
-                onClick={(e) => e.stopPropagation()}
+            <h3 
+                id="modal-title"
+                className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
             >
-                <h3 
-                    id="modal-title"
-                    className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
+                {title}
+            </h3>
+            <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
+            <div className="flex justify-end space-x-3">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Cancel"
                 >
-                    {title}
-                </h3>
-                <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
-                <div className="flex justify-end space-x-3">
-                    <button
-                        onClick={onCancel}
-                        className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                    >
-                        <X className="w-4 h-4" />
-                        <span>Cancel</span>
-                    </button>
-                    <button
-                        ref={confirmButtonRef}
-                        onClick={onConfirm}
-                        className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
-                    >
-                        <Check className="w-4 h-4" />
-                        <span>{confirmText}</span>
-                    </button>
-                </div>
+                    <X className="w-4 h-4" />
+                    <span>Cancel</span>
+                </button>
+                <button
+                    type="button"
+                    ref={confirmButtonRef}
+                    onClick={onConfirm}
+                    className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
+                    aria-label={confirmText}
+                >
+                    <Check className="w-4 h-4" />
+                    <span>{confirmText}</span>
+                </button>
             </div>
-        </div>
+        </ModalBase>
     );
 };
 
@@ -177,20 +163,10 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const selectRef = useRef(null);
 
     useEffect(() => {
-        // Reset selection when modal opens or session changes
         if (isOpen) {
             setNewTicketId('');
-            // Focus the select element when modal opens
-            setTimeout(() => selectRef.current?.focus(), 100);
-
-            // Handle Escape key
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onClose();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
         }
-    }, [isOpen, sessionInfo, onClose]);
+    }, [isOpen, sessionInfo]);
 
     if (!isOpen || !sessionInfo) return null;
 
@@ -205,142 +181,142 @@ const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm
     const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
+        <ModalBase
+            isOpen={isOpen && !!sessionInfo}
+            onClose={onClose}
+            labelledBy="reallocate-title"
+            describedBy="reallocate-description"
+            initialFocusRef={selectRef}
+            sizeClass="max-w-md"
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="reallocate-title"
-                aria-describedby="reallocate-description"
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100" 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
-                    Reallocate Session
-                </h3>
-                <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                    Move this session from <strong className="font-mono text-indigo-500">{sessionInfo.currentTicketId}</strong> to another ticket.
-                </p>
+            <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                Reallocate Session
+            </h3>
+            <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                Move this session from <strong className="font-mono text-indigo-500">{sessionInfo?.currentTicketId}</strong> to another ticket.
+            </p>
 
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            New Ticket ID
-                        </label>
-                        <select
-                            ref={selectRef}
-                            id="ticket-reallocate"
-                            value={newTicketId}
-                            onChange={(e) => setNewTicketId(e.target.value)}
-                            className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="" disabled>Select a ticket...</option>
-                            {availableTickets.map(ticketId => (
-                                <option key={ticketId} value={ticketId}>{ticketId}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                
-                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+            <div className="space-y-4">
+                <div>
+                    <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        New Ticket ID
+                    </label>
+                    <select
+                        ref={selectRef}
+                        id="ticket-reallocate"
+                        value={newTicketId}
+                        onChange={(e) => setNewTicketId(e.target.value)}
+                        className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                     >
-                        <X className="w-4 h-4" />
-                        <span>Cancel</span>
-                    </button>
-                    <button
-                        onClick={handleConfirm}
-                        disabled={!newTicketId || newTicketId === sessionInfo.currentTicketId}
-                        className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Check className="w-4 h-4" />
-                        <span>Confirm Reallocation</span>
-                    </button>
+                        <option value="" disabled>Select a ticket...</option>
+                        {availableTickets.map(ticketId => (
+                            <option key={ticketId} value={ticketId}>{ticketId}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
-        </div>
+            
+            <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Cancel"
+                >
+                    <X className="w-4 h-4" />
+                    <span>Cancel</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={!newTicketId || newTicketId === sessionInfo?.currentTicketId}
+                    className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Confirm Reallocation"
+                >
+                    <Check className="w-4 h-4" />
+                    <span>Confirm Reallocation</span>
+                </button>
+            </div>
+        </ModalBase>
     );
 };
 
 const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
     const copyButtonRef = useRef(null);
 
-    useEffect(() => {
-        if (isOpen) {
-            setTimeout(() => copyButtonRef.current?.focus(), 100);
+    // Focus and Escape are handled by ModalBase
 
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') onClose();
-            };
-            window.addEventListener('keydown', handleEscape);
-            return () => window.removeEventListener('keydown', handleEscape);
-        }
-    }, [isOpen, onClose]);
-
-    if (!isOpen) return null;
-
-    const copyToClipboard = () => {
-        if (reportData?.text) {
+    const copyToClipboard = async () => {
+        if (!reportData?.text) return;
+        try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(reportData.text);
+                toast.success('Copied to clipboard!');
+                return;
+            }
+        } catch {}
+        // Fallback method
+        try {
             const tempInput = document.createElement('textarea');
             tempInput.value = reportData.text;
+            tempInput.setAttribute('readonly', '');
+            tempInput.style.position = 'absolute';
+            tempInput.style.left = '-9999px';
             document.body.appendChild(tempInput);
             tempInput.select();
-            document.execCommand('copy');
+            const successful = document.execCommand('copy');
             document.body.removeChild(tempInput);
-            toast.success('Copied to clipboard!');
+            if (successful) {
+                toast.success('Copied to clipboard!');
+            } else {
+                toast.error('Copy failed');
+            }
+        } catch {
+            toast.error('Copy failed');
         }
     };
 
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4" 
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
+        <ModalBase
+            isOpen={isOpen}
+            onClose={onClose}
+            labelledBy="report-title"
+            describedBy="report-description"
+            initialFocusRef={copyButtonRef}
+            sizeClass="max-w-xl"
         >
-            <div 
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="report-title"
-                aria-describedby="report-description"
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]" 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
-                    <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
-                </h3>
-                <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                    Copy this prompt and paste it into your preferred AI chat application.
-                </p>
-                
-                <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
-                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
-                </div>
-                <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-                    <button
-                        ref={copyButtonRef}
-                        onClick={copyToClipboard}
-                        disabled={!reportData?.text}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Clipboard className="w-4 h-4" />
-                        <span>Copy to Clipboard</span>
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-                    >
-                        Close
-                    </button>
-                </div>
+            <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
+                <Send className="w-6 h-6 mr-2"/> AI Prompt for {ticketId}
+            </h3>
+            <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                Copy this prompt and paste it into your preferred AI chat application.
+            </p>
+            
+            <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
+                <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
             </div>
-        </div>
+            <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                <button
+                    type="button"
+                    ref={copyButtonRef}
+                    onClick={copyToClipboard}
+                    disabled={!reportData?.text}
+                    className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Copy to Clipboard"
+                >
+                    <Clipboard className="w-4 h-4" />
+                    <span>Copy to Clipboard</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
+                    aria-label="Close"
+                >
+                    Close
+                </button>
+            </div>
+        </ModalBase>
     );
 };
 
@@ -608,7 +584,6 @@ const App = () => {
   const editingTicketIdRef = useRef(null);
   const exportOptionRef = useRef('');
   const exportButtonRef = useRef(null);
-  const exportMenuRef = useRef(null);
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
   const handleExportRef = useRef(null);
@@ -855,88 +830,176 @@ const App = () => {
     
     
     setIsLoading(true);
-    const q = query(getCollectionRef);
+    const constraints = [];
+    try {
+      if (dateRangeStart) {
+        const startMs = new Date(dateRangeStart).getTime();
+        if (!Number.isNaN(startMs)) constraints.push(where('endTime', '>=', startMs));
+      }
+      if (dateRangeEnd) {
+        const endMs = new Date(dateRangeEnd).getTime() + (24 * 60 * 60 * 1000 - 1);
+        if (!Number.isNaN(endMs)) constraints.push(where('endTime', '<=', endMs));
+      }
+    } catch {}
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let fetchedLogs = [];
-      let currentActiveLog = null;
+    // Helper to parse a Firestore doc into our log shape
+    const toLog = (doc) => {
+      const data = doc.data();
+      let submissionDate = null;
+      if (data.submissionDate) {
+        if (typeof data.submissionDate === 'number') {
+          submissionDate = data.submissionDate;
+        } else if (data.submissionDate.toDate) {
+          submissionDate = data.submissionDate.toDate();
+        }
+      }
+      return {
+        id: doc.id,
+        ticketId: data.ticketId || 'No Ticket ID',
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        accumulatedMs: data.accumulatedMs || 0,
+        note: data.note || '',
+        status: data.status || 'unsubmitted',
+        submissionDate,
+        createdAt: data.createdAt || null
+      };
+    };
 
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        
-        // Handle submissionDate - could be Firestore Timestamp or number
-        let submissionDate = null;
-        if (data.submissionDate) {
-          if (typeof data.submissionDate === 'number') {
-            submissionDate = data.submissionDate; // Already a number (ms since epoch)
-          } else if (data.submissionDate.toDate) {
-            submissionDate = data.submissionDate.toDate(); // Firestore Timestamp
+    // When no date constraints, keep existing single real-time subscription (includes active)
+    if (constraints.length === 0) {
+      const q = query(getCollectionRef);
+      const unsubscribeSingle = onSnapshot(q, (snapshot) => {
+        let fetchedLogs = [];
+        let currentActiveLog = null;
+
+        snapshot.docs.forEach((doc) => {
+          const log = toLog(doc);
+          if (log.endTime === null) currentActiveLog = log;
+          else fetchedLogs.push(log);
+        });
+
+        setLogs(fetchedLogs);
+
+        if (currentActiveLog) {
+          setRunningLogDocId(currentActiveLog.id);
+          setCurrentTicketId(currentActiveLog.ticketId);
+          setCurrentNote(currentActiveLog.note || '');
+          setActiveLogData(currentActiveLog);
+
+          if (currentActiveLog.startTime) {
+            setIsTimerRunning(true);
+            setIsTimerPaused(false);
+            const currentRunDuration = Date.now() - currentActiveLog.startTime;
+            setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
+          } else {
+            setIsTimerRunning(false);
+            setIsTimerPaused(true);
+            setElapsedMs(currentActiveLog.accumulatedMs);
           }
+        } else if (runningLogDocId) {
+          startTransition(() => {
+            setIsTimerRunning(false);
+            setIsTimerPaused(false);
+            setRunningLogDocId(null);
+            setActiveLogData(null);
+            setCurrentTicketId('');
+            setCurrentNote('');
+            setElapsedMs(0);
+          });
         }
-        
-        const log = {
-          id: doc.id,
-          ticketId: data.ticketId || 'No Ticket ID',
-          startTime: data.startTime || null, 
-          endTime: data.endTime || null, 
-          accumulatedMs: data.accumulatedMs || 0,
-          note: data.note || '',
-          status: data.status || 'unsubmitted', // Add status field
-          submissionDate: submissionDate,
-          createdAt: data.createdAt || null // Track when session was originally created
-        };
 
-        if (log.endTime === null) {
-          currentActiveLog = log;
-        } else {
-          fetchedLogs.push(log);
-        }
+        setIsLoading(false);
+        setHasLoadedOnce(true);
+      }, (error) => {
+        console.error('Firestore snapshot error:', error);
+        setFirebaseError('Failed to load real-time data. Check console.');
+        setIsLoading(false);
+        setHasLoadedOnce(true);
       });
 
-      setLogs(fetchedLogs);
+      return () => unsubscribeSingle();
+    }
 
-      if (currentActiveLog) {
-        setRunningLogDocId(currentActiveLog.id);
-        setCurrentTicketId(currentActiveLog.ticketId);
-        setCurrentNote(currentActiveLog.note || '');
-        setActiveLogData(currentActiveLog); 
+    // With date constraints: subscribe to ranged finished sessions AND always-include active sessions
+    let rangedLogs = [];
+    let activeLog = null;
+    let gotRanged = false;
+    let gotActive = false;
 
-        if (currentActiveLog.startTime) {
+    const recompute = () => {
+      setLogs(rangedLogs);
+
+      if (activeLog) {
+        setRunningLogDocId(activeLog.id);
+        setCurrentTicketId(activeLog.ticketId);
+        setCurrentNote(activeLog.note || '');
+        setActiveLogData(activeLog);
+
+        if (activeLog.startTime) {
           setIsTimerRunning(true);
           setIsTimerPaused(false);
-          const currentRunDuration = Date.now() - currentActiveLog.startTime;
-          setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
+          const currentRunDuration = Date.now() - activeLog.startTime;
+          setElapsedMs(activeLog.accumulatedMs + currentRunDuration);
         } else {
           setIsTimerRunning(false);
           setIsTimerPaused(true);
-          setElapsedMs(currentActiveLog.accumulatedMs);
+          setElapsedMs(activeLog.accumulatedMs);
         }
-      } else {
-        if (runningLogDocId) {
-            // Batch non-urgent state updates for better performance
-            startTransition(() => {
-              setIsTimerRunning(false);
-              setIsTimerPaused(false);
-              setRunningLogDocId(null);
-              setActiveLogData(null); 
-              setCurrentTicketId('');
-              setCurrentNote('');
-              setElapsedMs(0);
-            });
-        }
+      } else if (runningLogDocId) {
+        startTransition(() => {
+          setIsTimerRunning(false);
+          setIsTimerPaused(false);
+          setRunningLogDocId(null);
+          setActiveLogData(null);
+          setCurrentTicketId('');
+          setCurrentNote('');
+          setElapsedMs(0);
+        });
       }
 
-      setIsLoading(false);
-      setHasLoadedOnce(true);
+      if (gotRanged && gotActive) {
+        setIsLoading(false);
+        setHasLoadedOnce(true);
+      }
+    };
+
+    const rangedQuery = query(getCollectionRef, ...constraints);
+    const unsubscribeRanged = onSnapshot(rangedQuery, (snapshot) => {
+      rangedLogs = [];
+      snapshot.docs.forEach((doc) => {
+        const log = toLog(doc);
+        // Ranged query contains only finished sessions
+        if (log.endTime !== null) rangedLogs.push(log);
+      });
+      gotRanged = true;
+      recompute();
     }, (error) => {
-      console.error('Firestore snapshot error:', error);
-      setFirebaseError('Failed to load real-time data. Check console.');
-      setIsLoading(false);
-      setHasLoadedOnce(true);
+      console.error('Firestore ranged snapshot error:', error);
+      setFirebaseError('Failed to load ranged data. Check console.');
+      gotRanged = true;
+      recompute();
     });
 
-    return () => unsubscribe();
-  }, [isAuthReady, getCollectionRef, runningLogDocId]);
+    const activeQuery = query(getCollectionRef, where('endTime', '==', null));
+    const unsubscribeActive = onSnapshot(activeQuery, (snapshot) => {
+      // We expect 0 or 1 active session for this user
+      const first = snapshot.docs[0];
+      activeLog = first ? toLog(first) : null;
+      gotActive = true;
+      recompute();
+    }, (error) => {
+      console.error('Firestore active snapshot error:', error);
+      setFirebaseError('Failed to load active session. Check console.');
+      gotActive = true;
+      recompute();
+    });
+
+    return () => {
+      unsubscribeRanged();
+      unsubscribeActive();
+    };
+  }, [isAuthReady, getCollectionRef, runningLogDocId, dateRangeStart, dateRangeEnd]);
 
   // --- Timer Interval Effect (Optimized) ---
   useEffect(() => {
@@ -1007,57 +1070,7 @@ const App = () => {
     }
   }, [exportOption]);
 
-  // --- Keyboard navigation for export dropdown ---
-  useEffect(() => {
-    if (exportOption !== 'menu') return;
-
-    const handleKeyDown = (e) => {
-      // Dynamic options based on current step
-      const formatOptions = ['csv', 'json'];
-      const scopeOptions = ['selected', 'filtered', 'all'];
-      const currentOptions = exportFormat ? scopeOptions : formatOptions;
-      
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setExportFocusIndex((prev) => (prev + 1) % currentOptions.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setExportFocusIndex((prev) => (prev - 1 + currentOptions.length) % currentOptions.length);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (!exportFormat) {
-          // Step 1: Select format
-          setExportFormat(formatOptions[exportFocusIndex]);
-          setExportFocusIndex(0);
-        } else {
-          // Step 2: Select scope and export
-          if (handleExportRef.current) {
-            handleExportRef.current(scopeOptions[exportFocusIndex], exportFormat);
-          }
-          setExportOption('');
-          setExportFormat('');
-          setExportFocusIndex(0);
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        if (exportFormat) {
-          // Go back to format selection
-          setExportFormat('');
-          setExportFocusIndex(0);
-        } else {
-          // Close dropdown
-          setExportOption('');
-          setExportFocusIndex(0);
-          if (exportButtonRef.current) {
-            exportButtonRef.current.focus();
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFormat, exportFocusIndex]);
+  // (Removed) Keyboard navigation for export dropdown is handled within ExportMenu component
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -1289,45 +1302,54 @@ const App = () => {
   }, [startNewOrOverride]);
   
   const handleCloseTicket = useCallback(async (ticketId) => {
-    if (!getTicketStatusCollectionRef || isLoading) return;
+    if (!getTicketStatusCollectionRef) return;
 
-    setIsLoading(true);
+    const loadingToast = toast.loading('Closing ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
     try {
-        if (statusEntry && statusEntry.id) {
-            await updateDoc(doc(getTicketStatusCollectionRef, statusEntry.id), { isClosed: true });
-        } else {
-            await addDoc(getTicketStatusCollectionRef, {
-                ticketId: ticketId,
-                isClosed: true,
-            });
-        }
+        // Use deterministic doc id = ticketId for stability
+        const targetDocId = statusEntry?.id || ticketId;
+        await setDoc(
+          doc(getTicketStatusCollectionRef, targetDocId),
+          { ticketId, isClosed: true },
+          { merge: true }
+        );
+        // Optimistic UI update while snapshot catches up
+        setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
+        toast.success('Ticket closed', { id: loadingToast, duration: 3000 });
     } catch (error) {
         console.error('Error closing ticket:', error);
         setFirebaseError(`Failed to close ticket ${ticketId}.`);
+        toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     } finally {
-        setIsLoading(false);
+        // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
-  }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses]);
   
   const handleReopenTicket = useCallback(async (ticketId) => {
-    if (!getTicketStatusCollectionRef || isLoading) return;
+    if (!getTicketStatusCollectionRef) return;
 
-    setIsLoading(true);
+    const loadingToast = toast.loading('Reopening ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
     try {
-        if (statusEntry && statusEntry.id) {
-            await updateDoc(doc(getTicketStatusCollectionRef, statusEntry.id), { isClosed: false });
-        }
+        const targetDocId = statusEntry?.id || ticketId;
+        await setDoc(
+          doc(getTicketStatusCollectionRef, targetDocId),
+          { ticketId, isClosed: false },
+          { merge: true }
+        );
+        setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
+        toast.success('Ticket reopened', { id: loadingToast, duration: 3000 });
     } catch (error) {
         console.error('Error reopening ticket:', error);
         setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
+        toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     } finally {
-        setIsLoading(false);
+        // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
-  }, [getTicketStatusCollectionRef, isLoading, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses]);
 
   const handleDeleteClick = useCallback((session) => {
     setLogToDelete(session);
@@ -1357,28 +1379,28 @@ const App = () => {
   }, []);
 
   // --- Bulk Operations ---
+  const [runAsync] = useAsyncAction('Failed to perform action');
+
   const handleBulkDelete = useCallback(async () => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
-    
+
     const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
     if (!confirmDelete) return;
 
-    setIsLoading(true);
     try {
-      const deletePromises = Array.from(selectedSessions).map(sessionId =>
-        deleteDoc(doc(getCollectionRef, sessionId))
-      );
-      await Promise.all(deletePromises);
-      setSelectedSessions(new Set());
-      toast.success(`Successfully deleted ${selectedSessions.size} session(s)`);
+      setIsLoading(true);
+      await runAsync(async () => {
+        const deletePromises = Array.from(selectedSessions).map(sessionId => deleteDoc(doc(getCollectionRef, sessionId)));
+        await Promise.all(deletePromises);
+        setSelectedSessions(new Set());
+      }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
     } catch (error) {
       console.error('Error deleting sessions:', error);
       setFirebaseError('Failed to delete some sessions.');
-      toast.error('Failed to delete some sessions');
     } finally {
       setIsLoading(false);
     }
-  }, [getCollectionRef, selectedSessions]);
+  }, [getCollectionRef, selectedSessions, runAsync]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
@@ -1943,8 +1965,8 @@ ${combinedReport.trim()}
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -2595,100 +2617,22 @@ ${combinedReport.trim()}
                 </button>
                 
                 {exportOption === 'menu' && (
-                  <div 
-                    ref={exportMenuRef}
-                    className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 min-w-[200px]"
-                    role="menu"
-                    aria-label="Export options"
-                  >
-                    {!exportFormat ? (
-                      <>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                          Choose Format
-                        </div>
-                        <button
-                          onClick={() => {
-                            setExportFormat('csv');
-                            setExportFocusIndex(0);
-                          }}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          <span className="text-xl">📄</span>
-                          <span className="font-medium">CSV</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExportFormat('json');
-                            setExportFocusIndex(0);
-                          }}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          <span className="text-xl">📋</span>
-                          <span className="font-medium">JSON</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                          <span>Choose Scope</span>
-                          <span className="px-2 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded">
-                            {exportFormat.toUpperCase()}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
-                        >
-                          <ChevronLeft className="h-3 w-3" />
-                          Back to format
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('selected', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={isActionDisabled}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          Selected
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('filtered', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={filteredAndGroupedLogs.length === 0}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${exportFocusIndex === 1 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          Filtered
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExport('all', exportFormat);
-                            setExportOption('');
-                            setExportFormat('');
-                            setExportFocusIndex(0);
-                          }}
-                          disabled={logs.length === 0}
-                          className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-b-lg ${exportFocusIndex === 2 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                          role="menuitem"
-                        >
-                          All Data
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  <ExportMenu
+                    isOpen={exportOption === 'menu'}
+                    onClose={() => { setExportOption(''); setExportFormat(''); setExportFocusIndex(0); }}
+                    buttonRef={exportButtonRef}
+                    onChooseFormat={(fmt) => { setExportFormat(fmt); setExportFocusIndex(0); }}
+                    onExportScope={(scope) => {
+                      handleExport(scope, exportFormat);
+                      setExportOption(''); setExportFormat(''); setExportFocusIndex(0);
+                    }}
+                    canExportSelected={!isActionDisabled}
+                    canExportFiltered={filteredAndGroupedLogs.length > 0}
+                    canExportAll={logs.length > 0}
+                    exportFormat={exportFormat}
+                    focusIndex={exportFocusIndex}
+                    setFocusIndex={setExportFocusIndex}
+                  />
                 )}
               </div>
             </div>
@@ -2734,7 +2678,7 @@ ${combinedReport.trim()}
 
           {/* Compact Table Layout */}
           <div className="overflow-x-auto pt-4">
-            <table className="w-full border-collapse table-fixed" style={{minWidth: '600px'}}>
+            <table className="w-full border-collapse table-fixed min-w-[42rem] md:min-w-[56rem]">
               {/* Table Header */}
               <thead>
                 <tr className="border-b-2 border-gray-200 dark:border-gray-700">
@@ -2759,216 +2703,40 @@ ${combinedReport.trim()}
               <tbody>
                 {filteredAndGroupedLogs.map((group) => {
                   const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
-                  
                   return (
-                    <React.Fragment key={group.ticketId}>
-                      {/* Main Ticket Row */}
-                      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <td className="py-3 px-2">
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ticket ${group.ticketId}`}
-                            checked={selectedTickets.has(group.ticketId)}
-                            onChange={() => handleToggleSelectTicket(group.ticketId)}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500"
-                          />
-                        </td>
-                        
-                        <td className="py-3 px-2">
-                          <div className="flex flex-col gap-2 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {editingTicketId === group.ticketId ? (
-                                <input
-                                  type="text"
-                                  value={editingTicketValue}
-                                  onChange={(e) => setEditingTicketValue(e.target.value)}
-                                  onBlur={() => handleUpdateTicketId(group.ticketId, editingTicketValue)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      handleUpdateTicketId(group.ticketId, editingTicketValue);
-                                    } else if (e.key === 'Escape') {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      setEditingTicketId(null);
-                                    }
-                                  }}
-                                  className="text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-gray-600 rounded px-2 py-1 border border-indigo-300 min-w-0 flex-1"
-                                  autoFocus
-                                />
-                              ) : (
-                                <>
-                                  <span className="text-indigo-700 dark:text-indigo-300 font-bold truncate min-w-0 flex-1">
-                                    {group.ticketId}
-                                  </span>
-                                  {isFullySubmitted && <Check className="w-4 h-4 text-green-500 flex-shrink-0" title="All sessions submitted"/>}
-                                  <button 
-                                    onClick={() => {
-                                      setEditingTicketId(group.ticketId);
-                                      setEditingTicketValue(group.ticketId);
-                                    }}
-                                    className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
-                                    title="Edit Ticket ID"
-                                  >
-                                    <Pencil className="w-3 h-3" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                            {/* Session Notes under Ticket ID */}
-                            {group.sessions.length > 0 && (
-                              <div className="space-y-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 min-w-0">
-                                    <BookOpen className="h-3 w-3 flex-shrink-0"/>
-                                    {editingSessionNote === session.id ? (
-                                      <input
-                                        type="text"
-                                        value={editingSessionNoteValue}
-                                        onChange={(e) => setEditingSessionNoteValue(e.target.value)}
-                                        onBlur={() => handleUpdateSessionNote(session.id, editingSessionNoteValue)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            handleUpdateSessionNote(session.id, editingSessionNoteValue);
-                                          } else if (e.key === 'Escape') {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            setEditingSessionNote(null);
-                                            setEditingSessionNoteValue('');
-                                          }
-                                        }}
-                                        placeholder="Add session note..."
-                                        maxLength={5000}
-                                        className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-600 rounded px-2 py-1 border border-gray-300 dark:border-gray-500 min-w-0 flex-1"
-                                        autoFocus
-                                      />
-                                    ) : (
-                                      <>
-                                        <span className="truncate flex-1">{session.note || 'No notes'}</span>
-                                        <button 
-                                          onClick={() => {
-                                            setEditingSessionNote(session.id);
-                                            setEditingSessionNoteValue(session.note || '');
-                                          }}
-                                          className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex-shrink-0"
-                                          title="Edit Session Note"
-                                        >
-                                          <Pencil className="w-3 h-3" />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="font-mono font-bold text-indigo-800 dark:text-indigo-200 whitespace-nowrap">
-                              {formatTime(group.totalDurationMs)}
-                            </span>
-                            {/* Individual session times and dates */}
-                            {group.sessions.length > 0 && (
-                              <div className="space-y-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                    {formatTime(session.accumulatedMs)} • {new Date(session.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {group.sessions.length}
-                          </span>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            group.isClosed 
-                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' 
-                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                          }`}>
-                            {group.isClosed ? 'Closed' : 'Open'}
-                          </span>
-                        </td>
-                        
-                        <td className="py-3 px-2 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="flex items-center justify-center gap-1">
-                              {group.isClosed ? (
-                                <button 
-                                  onClick={() => handleReopenTicket(group.ticketId)} 
-                                  className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                                  title="Reopen Ticket"
-                                >
-                                  <Repeat className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <>
-                                  <button 
-                                    onClick={() => handleCloseTicket(group.ticketId)} 
-                                    className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                    title="Close Ticket"
-                                  >
-                                    <Lock className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleContinueTicket(group.ticketId)} 
-                                    className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                                    title="Start New Session"
-                                  >
-                                    <Repeat className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                            {/* Session Actions */}
-                            {group.sessions.length > 0 && (
-                              <div className="flex flex-col items-center gap-1">
-                                {group.sessions.map(session => (
-                                  <div key={session.id} className="flex items-center gap-1">
-                                    <button 
-                                      onClick={() => {
-                                        setReallocatingSessionInfo({ sessionId: session.id, currentTicketId: group.ticketId });
-                                        setIsReallocateModalOpen(true);
-                                      }} 
-                                      className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                                      title="Reallocate Session"
-                                    >
-                                      <CornerUpRight className="h-3 w-3" />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteClick(session)} 
-                                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                      title="Delete Session"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      
-                    </React.Fragment>
+                    <TicketRow
+                      key={group.ticketId}
+                      group={group}
+                      isSelected={selectedTickets.has(group.ticketId)}
+                      onToggleSelectTicket={handleToggleSelectTicket}
+                      isFullySubmitted={isFullySubmitted}
+                      onReopenTicket={handleReopenTicket}
+                      onCloseTicket={handleCloseTicket}
+                      onContinueTicket={handleContinueTicket}
+                      onReallocateSession={(sessionId, ticketId) => {
+                        setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });
+                        setIsReallocateModalOpen(true);
+                      }}
+                      editingTicketId={editingTicketId}
+                      editingTicketValue={editingTicketValue}
+                      setEditingTicketId={setEditingTicketId}
+                      setEditingTicketValue={setEditingTicketValue}
+                      handleUpdateTicketId={handleUpdateTicketId}
+                      sessions={group.sessions}
+                      editingSessionNote={editingSessionNote}
+                      editingSessionNoteValue={editingSessionNoteValue}
+                      setEditingSessionNote={setEditingSessionNote}
+                      setEditingSessionNoteValue={setEditingSessionNoteValue}
+                      handleUpdateSessionNote={handleUpdateSessionNote}
+                      handleDeleteClick={handleDeleteClick}
+                    />
                   );
                 })}
               </tbody>
             </table>
           </div>
         </section>
-      </div>
+    </div>
     </div>
   );
 };
