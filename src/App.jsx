@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import {
-  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Repeat, Download, Lock, Send, Clipboard, BookOpen, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw, ChevronLeft
+  Clock, Play, Square, List, AlertTriangle, Loader, Trash2, Pause, X, Check, Download, Lock, Send, Clipboard, User, Keyboard, Sun, Moon, Info, Pencil, CornerUpRight, CheckCircle, TrendingUp, RotateCcw
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
@@ -607,7 +607,7 @@ const App = () => {
   const editingTicketIdRef = useRef(null);
   const exportOptionRef = useRef('');
   const exportButtonRef = useRef(null);
-  const exportMenuRef = useRef(null);
+  // const exportMenuRef = useRef(null); // no longer used
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
   const handleExportRef = useRef(null);
@@ -1367,7 +1367,7 @@ const App = () => {
   }, []);
 
   // --- Bulk Operations ---
-  const [runAsync, isAsyncLoading] = useAsyncAction('Failed to perform action');
+  const [runAsync] = useAsyncAction('Failed to perform action');
 
   const handleBulkDelete = useCallback(async () => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
@@ -1380,7 +1380,7 @@ const App = () => {
       await Promise.all(deletePromises);
       setSelectedSessions(new Set());
     }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
-  }, [getCollectionRef, selectedSessions]);
+  }, [getCollectionRef, selectedSessions, runAsync]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
