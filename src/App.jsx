@@ -17,7 +17,6 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import ModalBase from './components/ModalBase.jsx';
 import ExportMenu from './components/ExportMenu.jsx';
-import { FixedSizeList as VirtualList } from 'react-window';
 import TicketRow from './components/TicketRow.jsx';
 import useAsyncAction from './utils/useAsyncAction.js';
 
@@ -2657,42 +2656,8 @@ ${combinedReport.trim()}
             </div>
           )}
 
-          {/* Compact Table Layout (virtualize when many rows) */}
+          {/* Compact Table Layout */}
           <div className="overflow-x-auto pt-4">
-            {filteredAndGroupedLogs.length > 100 ? (
-              <div className="min-w-[42rem] md:min-w-[56rem]">
-                <div className="grid grid-cols-[12rem,8rem,6rem,6rem,12rem] gap-2 px-2 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <div>Ticket ID</div>
-                  <div className="text-right">Total</div>
-                  <div className="text-center">Sessions</div>
-                  <div className="text-center">Status</div>
-                  <div className="text-center">Actions</div>
-                </div>
-                <VirtualList height={480} itemCount={filteredAndGroupedLogs.length} itemSize={72} width={'100%'}>
-                  {({ index, style }) => {
-                    const group = filteredAndGroupedLogs[index];
-                    const isFullySubmitted = group.sessions.every(session => session.status === 'submitted');
-                    return (
-                      <div style={style} className="px-2 flex items-center border-b border-gray-100 dark:border-gray-800">
-                        <div className="flex-1 min-w-0 grid grid-cols-[12rem,8rem,6rem,6rem,12rem] gap-2 items-center">
-                          <div className="min-w-0 truncate text-indigo-700 dark:text-indigo-300 font-bold">{group.ticketId}</div>
-                          <div className="text-right font-mono font-bold">{formatTime(group.totalDurationMs)}</div>
-                          <div className="text-center text-sm text-gray-600 dark:text-gray-400">{group.sessions.length}</div>
-                          <div className="text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${group.isClosed ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200' : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'}`}>
-                              {group.isClosed ? 'Closed' : 'Open'}
-                            </span>
-                          </div>
-                          <div className="text-center">
-                            <button type="button" onClick={() => handleContinueTicket(group.ticketId)} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700" aria-label="Start New Session">Start</button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }}
-                </VirtualList>
-              </div>
-            ) : (
             <table className="w-full border-collapse table-fixed min-w-[42rem] md:min-w-[56rem]">
               {/* Table Header */}
               <thead>
@@ -2749,7 +2714,6 @@ ${combinedReport.trim()}
                 })}
               </tbody>
             </table>
-            )}
           </div>
         </section>
     </div>
