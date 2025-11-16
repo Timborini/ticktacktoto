@@ -202,21 +202,21 @@ const TicketRow = memo(function TicketRow({
                 <div key={session.id} className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => handleDeleteClick(session)}
-                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                    title="Delete Session"
-                    aria-label="Delete Session"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => onReallocateSession(session.id, group.ticketId)}
                     className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
                     title="Reallocate Session"
                     aria-label="Reallocate Session"
                   >
                     <CornerUpRight className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteClick(session)}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    title="Delete Session"
+                    aria-label="Delete Session"
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
               ))}
