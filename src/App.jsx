@@ -1320,7 +1320,7 @@ const App = () => {
         setFirebaseError(`Failed to close ticket ${ticketId}.`);
         toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     } finally {
-        toast.dismiss(loadingToast);
+        // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
   }, [getTicketStatusCollectionRef, ticketStatuses]);
   
@@ -1344,7 +1344,7 @@ const App = () => {
         setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
         toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     } finally {
-        toast.dismiss(loadingToast);
+        // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
   }, [getTicketStatusCollectionRef, ticketStatuses]);
 
