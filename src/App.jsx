@@ -584,7 +584,6 @@ const App = () => {
   const editingTicketIdRef = useRef(null);
   const exportOptionRef = useRef('');
   const exportButtonRef = useRef(null);
-  // const exportMenuRef = useRef(null); // no longer used
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
   const handleExportRef = useRef(null);
@@ -842,87 +841,164 @@ const App = () => {
         if (!Number.isNaN(endMs)) constraints.push(where('endTime', '<=', endMs));
       }
     } catch {}
-    const q = constraints.length ? query(getCollectionRef, ...constraints) : query(getCollectionRef);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let fetchedLogs = [];
-      let currentActiveLog = null;
+    // Helper to parse a Firestore doc into our log shape
+    const toLog = (doc) => {
+      const data = doc.data();
+      let submissionDate = null;
+      if (data.submissionDate) {
+        if (typeof data.submissionDate === 'number') {
+          submissionDate = data.submissionDate;
+        } else if (data.submissionDate.toDate) {
+          submissionDate = data.submissionDate.toDate();
+        }
+      }
+      return {
+        id: doc.id,
+        ticketId: data.ticketId || 'No Ticket ID',
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        accumulatedMs: data.accumulatedMs || 0,
+        note: data.note || '',
+        status: data.status || 'unsubmitted',
+        submissionDate,
+        createdAt: data.createdAt || null
+      };
+    };
 
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        
-        // Handle submissionDate - could be Firestore Timestamp or number
-        let submissionDate = null;
-        if (data.submissionDate) {
-          if (typeof data.submissionDate === 'number') {
-            submissionDate = data.submissionDate; // Already a number (ms since epoch)
-          } else if (data.submissionDate.toDate) {
-            submissionDate = data.submissionDate.toDate(); // Firestore Timestamp
+    // When no date constraints, keep existing single real-time subscription (includes active)
+    if (constraints.length === 0) {
+      const q = query(getCollectionRef);
+      const unsubscribeSingle = onSnapshot(q, (snapshot) => {
+        let fetchedLogs = [];
+        let currentActiveLog = null;
+
+        snapshot.docs.forEach((doc) => {
+          const log = toLog(doc);
+          if (log.endTime === null) currentActiveLog = log;
+          else fetchedLogs.push(log);
+        });
+
+        setLogs(fetchedLogs);
+
+        if (currentActiveLog) {
+          setRunningLogDocId(currentActiveLog.id);
+          setCurrentTicketId(currentActiveLog.ticketId);
+          setCurrentNote(currentActiveLog.note || '');
+          setActiveLogData(currentActiveLog);
+
+          if (currentActiveLog.startTime) {
+            setIsTimerRunning(true);
+            setIsTimerPaused(false);
+            const currentRunDuration = Date.now() - currentActiveLog.startTime;
+            setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
+          } else {
+            setIsTimerRunning(false);
+            setIsTimerPaused(true);
+            setElapsedMs(currentActiveLog.accumulatedMs);
           }
+        } else if (runningLogDocId) {
+          startTransition(() => {
+            setIsTimerRunning(false);
+            setIsTimerPaused(false);
+            setRunningLogDocId(null);
+            setActiveLogData(null);
+            setCurrentTicketId('');
+            setCurrentNote('');
+            setElapsedMs(0);
+          });
         }
-        
-        const log = {
-          id: doc.id,
-          ticketId: data.ticketId || 'No Ticket ID',
-          startTime: data.startTime || null, 
-          endTime: data.endTime || null, 
-          accumulatedMs: data.accumulatedMs || 0,
-          note: data.note || '',
-          status: data.status || 'unsubmitted', // Add status field
-          submissionDate: submissionDate,
-          createdAt: data.createdAt || null // Track when session was originally created
-        };
 
-        if (log.endTime === null) {
-          currentActiveLog = log;
-        } else {
-          fetchedLogs.push(log);
-        }
+        setIsLoading(false);
+        setHasLoadedOnce(true);
+      }, (error) => {
+        console.error('Firestore snapshot error:', error);
+        setFirebaseError('Failed to load real-time data. Check console.');
+        setIsLoading(false);
+        setHasLoadedOnce(true);
       });
 
-      setLogs(fetchedLogs);
+      return () => unsubscribeSingle();
+    }
 
-      if (currentActiveLog) {
-        setRunningLogDocId(currentActiveLog.id);
-        setCurrentTicketId(currentActiveLog.ticketId);
-        setCurrentNote(currentActiveLog.note || '');
-        setActiveLogData(currentActiveLog); 
+    // With date constraints: subscribe to ranged finished sessions AND always-include active sessions
+    let rangedLogs = [];
+    let activeLog = null;
+    let gotRanged = false;
+    let gotActive = false;
 
-        if (currentActiveLog.startTime) {
+    const recompute = () => {
+      setLogs(rangedLogs);
+
+      if (activeLog) {
+        setRunningLogDocId(activeLog.id);
+        setCurrentTicketId(activeLog.ticketId);
+        setCurrentNote(activeLog.note || '');
+        setActiveLogData(activeLog);
+
+        if (activeLog.startTime) {
           setIsTimerRunning(true);
           setIsTimerPaused(false);
-          const currentRunDuration = Date.now() - currentActiveLog.startTime;
-          setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
+          const currentRunDuration = Date.now() - activeLog.startTime;
+          setElapsedMs(activeLog.accumulatedMs + currentRunDuration);
         } else {
           setIsTimerRunning(false);
           setIsTimerPaused(true);
-          setElapsedMs(currentActiveLog.accumulatedMs);
+          setElapsedMs(activeLog.accumulatedMs);
         }
-      } else {
-        if (runningLogDocId) {
-            // Batch non-urgent state updates for better performance
-            startTransition(() => {
-              setIsTimerRunning(false);
-              setIsTimerPaused(false);
-              setRunningLogDocId(null);
-              setActiveLogData(null); 
-              setCurrentTicketId('');
-              setCurrentNote('');
-              setElapsedMs(0);
-            });
-        }
+      } else if (runningLogDocId) {
+        startTransition(() => {
+          setIsTimerRunning(false);
+          setIsTimerPaused(false);
+          setRunningLogDocId(null);
+          setActiveLogData(null);
+          setCurrentTicketId('');
+          setCurrentNote('');
+          setElapsedMs(0);
+        });
       }
 
-      setIsLoading(false);
-      setHasLoadedOnce(true);
+      if (gotRanged && gotActive) {
+        setIsLoading(false);
+        setHasLoadedOnce(true);
+      }
+    };
+
+    const rangedQuery = query(getCollectionRef, ...constraints);
+    const unsubscribeRanged = onSnapshot(rangedQuery, (snapshot) => {
+      rangedLogs = [];
+      snapshot.docs.forEach((doc) => {
+        const log = toLog(doc);
+        // Ranged query contains only finished sessions
+        if (log.endTime !== null) rangedLogs.push(log);
+      });
+      gotRanged = true;
+      recompute();
     }, (error) => {
-      console.error('Firestore snapshot error:', error);
-      setFirebaseError('Failed to load real-time data. Check console.');
-      setIsLoading(false);
-      setHasLoadedOnce(true);
+      console.error('Firestore ranged snapshot error:', error);
+      setFirebaseError('Failed to load ranged data. Check console.');
+      gotRanged = true;
+      recompute();
     });
 
-    return () => unsubscribe();
+    const activeQuery = query(getCollectionRef, where('endTime', '==', null));
+    const unsubscribeActive = onSnapshot(activeQuery, (snapshot) => {
+      // We expect 0 or 1 active session for this user
+      const first = snapshot.docs[0];
+      activeLog = first ? toLog(first) : null;
+      gotActive = true;
+      recompute();
+    }, (error) => {
+      console.error('Firestore active snapshot error:', error);
+      setFirebaseError('Failed to load active session. Check console.');
+      gotActive = true;
+      recompute();
+    });
+
+    return () => {
+      unsubscribeRanged();
+      unsubscribeActive();
+    };
   }, [isAuthReady, getCollectionRef, runningLogDocId, dateRangeStart, dateRangeEnd]);
 
   // --- Timer Interval Effect (Optimized) ---
@@ -994,57 +1070,7 @@ const App = () => {
     }
   }, [exportOption]);
 
-  // --- Keyboard navigation for export dropdown ---
-  useEffect(() => {
-    if (exportOption !== 'menu') return;
-
-    const handleKeyDown = (e) => {
-      // Dynamic options based on current step
-      const formatOptions = ['csv', 'json'];
-      const scopeOptions = ['selected', 'filtered', 'all'];
-      const currentOptions = exportFormat ? scopeOptions : formatOptions;
-      
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setExportFocusIndex((prev) => (prev + 1) % currentOptions.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setExportFocusIndex((prev) => (prev - 1 + currentOptions.length) % currentOptions.length);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (!exportFormat) {
-          // Step 1: Select format
-          setExportFormat(formatOptions[exportFocusIndex]);
-          setExportFocusIndex(0);
-        } else {
-          // Step 2: Select scope and export
-          if (handleExportRef.current) {
-            handleExportRef.current(scopeOptions[exportFocusIndex], exportFormat);
-          }
-          setExportOption('');
-          setExportFormat('');
-          setExportFocusIndex(0);
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        if (exportFormat) {
-          // Go back to format selection
-          setExportFormat('');
-          setExportFocusIndex(0);
-        } else {
-          // Close dropdown
-          setExportOption('');
-          setExportFocusIndex(0);
-          if (exportButtonRef.current) {
-            exportButtonRef.current.focus();
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportOption, exportFormat, exportFocusIndex]);
+  // (Removed) Keyboard navigation for export dropdown is handled within ExportMenu component
   
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
