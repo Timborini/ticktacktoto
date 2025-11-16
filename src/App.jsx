@@ -2063,7 +2063,7 @@ ${combinedReport.trim()}
         onConfirm={handleReallocateSession}
       />
 
-      <div className="max-w-5xl mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
             <div className="relative">
                 <div className="flex flex-col space-y-3">
