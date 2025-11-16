@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore, collection, query, onSnapshot,
-  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch
+  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch, setDoc
 } from 'firebase/firestore';
 
 // --- Toast Notifications ---
@@ -1305,19 +1305,20 @@ const App = () => {
     const statusEntry = ticketStatuses[ticketId];
 
     try {
-        if (statusEntry && statusEntry.id) {
-            await updateDoc(doc(getTicketStatusCollectionRef, statusEntry.id), { isClosed: true });
-        } else {
-            await addDoc(getTicketStatusCollectionRef, {
-                ticketId: ticketId,
-                isClosed: true,
-            });
-        }
-        toast.success('Ticket closed', { id: loadingToast });
+        // Use deterministic doc id = ticketId for stability
+        const targetDocId = statusEntry?.id || ticketId;
+        await setDoc(
+          doc(getTicketStatusCollectionRef, targetDocId),
+          { ticketId, isClosed: true },
+          { merge: true }
+        );
+        // Optimistic UI update while snapshot catches up
+        setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
+        toast.success('Ticket closed', { id: loadingToast, duration: 3000 });
     } catch (error) {
         console.error('Error closing ticket:', error);
         setFirebaseError(`Failed to close ticket ${ticketId}.`);
-        toast.error('Failed to close ticket', { id: loadingToast });
+        toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     } finally {
         toast.dismiss(loadingToast);
     }
@@ -1330,14 +1331,18 @@ const App = () => {
     const statusEntry = ticketStatuses[ticketId];
 
     try {
-        if (statusEntry && statusEntry.id) {
-            await updateDoc(doc(getTicketStatusCollectionRef, statusEntry.id), { isClosed: false });
-        }
-        toast.success('Ticket reopened', { id: loadingToast });
+        const targetDocId = statusEntry?.id || ticketId;
+        await setDoc(
+          doc(getTicketStatusCollectionRef, targetDocId),
+          { ticketId, isClosed: false },
+          { merge: true }
+        );
+        setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
+        toast.success('Ticket reopened', { id: loadingToast, duration: 3000 });
     } catch (error) {
         console.error('Error reopening ticket:', error);
         setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
-        toast.error('Failed to reopen ticket', { id: loadingToast });
+        toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     } finally {
         toast.dismiss(loadingToast);
     }
