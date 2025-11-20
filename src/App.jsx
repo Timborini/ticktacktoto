@@ -2143,6 +2143,7 @@ ${combinedReport.trim()}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
           setDateFilter={setDateFilter}
+          dateFilter={dateFilter}
           handleBulkStatusChange={handleBulkStatusChange}
           handleBulkDelete={handleBulkDelete}
           handleMarkAsUnsubmitted={handleMarkAsUnsubmitted}
