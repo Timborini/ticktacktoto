@@ -14,6 +14,7 @@ const SessionList = ({
     statusFilter,
     setStatusFilter,
     setDateFilter,
+    dateFilter,
     handleBulkStatusChange,
     handleBulkDelete,
     handleMarkAsUnsubmitted,
@@ -205,7 +206,7 @@ const SessionList = ({
                             ? "Start tracking time by entering a ticket ID and clicking START above"
                             : "Try adjusting your filters or clearing them to see more results"}
                     </p>
-                    {(statusFilter !== 'All' || setDateFilter) && (
+                    {(statusFilter !== 'All' || dateFilter) && (
                         <button
                             onClick={() => { setStatusFilter('All'); setDateFilter(''); }}
                             className="mt-4 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors text-sm font-medium"
