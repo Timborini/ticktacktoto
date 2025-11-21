@@ -1303,26 +1303,60 @@ const App = () => {
     setIsConfirmingDelete(true);
   }, []);
 
+  const [ticketToDelete, setTicketToDelete] = useState(null);
+
+  const handleDeleteTicketClick = useCallback((ticketId) => {
+    setTicketToDelete(ticketId);
+    setIsConfirmingDelete(true);
+  }, []);
+
   const handleConfirmDelete = useCallback(async () => {
-    if (!logToDelete || !getCollectionRef) return;
+    if ((!logToDelete && !ticketToDelete) || !getCollectionRef) return;
 
     setIsConfirmingDelete(false);
     setIsLoading(true);
 
     try {
-      await deleteDoc(doc(getCollectionRef, logToDelete.id));
+      if (ticketToDelete) {
+        // Delete all sessions for the ticket
+        const sessionsQuery = query(getCollectionRef, where("ticketId", "==", ticketToDelete));
+        const sessionSnapshots = await getDocs(sessionsQuery);
+
+        const deletePromises = sessionSnapshots.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+
+        // Try to delete ticket status, but don't block if it fails (might be restricted)
+        if (getTicketStatusCollectionRef) {
+          try {
+            const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", ticketToDelete));
+            const statusSnapshots = await getDocs(statusQuery);
+            const statusDeletePromises = statusSnapshots.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(statusDeletePromises);
+          } catch (statusError) {
+            console.warn("Could not delete ticket status:", statusError);
+          }
+        }
+
+        toast.success(`Deleted ticket ${ticketToDelete} and all its sessions`);
+      } else if (logToDelete) {
+        // Delete single session
+        await deleteDoc(doc(getCollectionRef, logToDelete.id));
+        toast.success('Session deleted');
+      }
     } catch (error) {
-      console.error('Error deleting log:', error);
-      setFirebaseError('Failed to delete log entry.');
+      console.error('Error deleting:', error);
+      setFirebaseError('Failed to delete.');
     } finally {
       setLogToDelete(null);
+      setTicketToDelete(null);
       setIsLoading(false);
     }
-  }, [logToDelete, getCollectionRef]);
+  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef]);
 
   const handleCancelDelete = useCallback(() => {
     setIsConfirmingDelete(false);
     setLogToDelete(null);
+    setTicketToDelete(null);
   }, []);
 
   // --- Bulk Operations ---
@@ -1874,6 +1908,15 @@ ${combinedReport.trim()}
         </div>
       </div>
     );
+  } else if (ticketToDelete) {
+    const sessionsCount = logs.filter(l => l.ticketId === ticketToDelete).length;
+    deleteMessage = (
+      <div>
+        <p className="text-red-600 dark:text-red-400 font-bold mb-2">Warning: This action cannot be undone.</p>
+        <p>Are you sure you want to delete Ticket <strong>{ticketToDelete}</strong>?</p>
+        <p className="mt-2">This will permanently delete <strong>{sessionsCount}</strong> session{sessionsCount !== 1 ? 's' : ''} associated with this ticket.</p>
+      </div>
+    );
   }
 
   if (firebaseError) {
@@ -2169,6 +2212,7 @@ ${combinedReport.trim()}
           setEditingSessionNoteValue={setEditingSessionNoteValue}
           handleUpdateSessionNote={handleUpdateSessionNote}
           handleDeleteClick={handleDeleteClick}
+          handleDeleteTicketClick={handleDeleteTicketClick}
           handleReallocateSession={(sessionId, ticketId) => {
             setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });
             setIsReallocateModalOpen(true);

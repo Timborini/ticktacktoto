@@ -1,5 +1,8 @@
 import React from 'react';
 import { List, Check, RotateCcw, Trash2, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+
 import TicketRow from './TicketRow';
 import ExportMenu from './ExportMenu';
 
@@ -44,40 +47,28 @@ const SessionList = ({
     handleReallocateSession,
     handleCloseTicket,
     handleReopenTicket,
-    handleContinueTicket
+    handleContinueTicket,
+    handleDeleteTicketClick
 }) => {
 
     return (
         <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl">
             {/* Bulk Actions Bar */}
             {selectedSessions.size > 0 && (
-                <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={selectedSessions.size > 0}
-                            onChange={(e) => {
-                                if (e.target.checked) {
-                                    const allSessions = new Set();
-                                    filteredAndGroupedLogs.forEach(group => {
-                                        group.sessions.forEach(session => allSessions.add(session.id));
-                                    });
-                                    setSelectedSessions(allSessions);
-                                } else {
-                                    setSelectedSessions(new Set());
-                                }
-                            }}
-                            className="w-5 h-5 cursor-pointer"
-                        />
-                        <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                            {selectedSessions.size} session(s) selected
+                <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between flex-wrap gap-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-indigo-100 dark:bg-indigo-900 p-2 rounded-lg">
+                            <Check className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <span className="text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                            {selectedSessions.size} session{selectedSessions.size !== 1 ? 's' : ''} selected
                         </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <button
                             onClick={() => handleBulkStatusChange('submitted')}
                             disabled={isLoading}
-                            className="px-3 py-1.5 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            className="px-3 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <Check className="h-4 w-4" />
                             Mark Submitted
@@ -85,7 +76,7 @@ const SessionList = ({
                         <button
                             onClick={() => handleBulkStatusChange('unsubmitted')}
                             disabled={isLoading}
-                            className="px-3 py-1.5 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            className="px-3 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <RotateCcw className="h-4 w-4" />
                             Mark Unsubmitted
@@ -93,50 +84,56 @@ const SessionList = ({
                         <button
                             onClick={handleBulkDelete}
                             disabled={isLoading}
-                            className="px-3 py-1.5 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <Trash2 className="h-4 w-4" />
                             Delete
                         </button>
                         <button
                             onClick={() => setSelectedSessions(new Set())}
-                            className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                            className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm"
                         >
-                            Clear Selection
+                            Cancel
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* Compact Header */}
-            <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
-                <div className="flex items-center gap-4">
-                    <h2 className="flex items-center text-xl font-semibold text-gray-800 dark:text-gray-200">
-                        <List className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" />
-                        Time Log History
-                    </h2>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {filteredAndGroupedLogs.length} tickets • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} sessions
-                    </span>
+            {/* Header & Controls */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 dark:border-gray-700 pb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                        <List className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                            Time Log History
+                        </h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {filteredAndGroupedLogs.length} tickets • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} sessions
+                        </p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-3 w-full md:w-auto">
                     {statusFilter === 'Submitted' ? (
                         <button
                             onClick={handleMarkAsUnsubmitted}
                             disabled={isActionDisabled}
-                            className="px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                            className="flex-1 md:flex-none px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 shadow-sm"
                         >
-                            Unsubmit
+                            Unsubmit All
                         </button>
                     ) : (
                         <button
                             onClick={handleCreateDraft}
                             disabled={isActionDisabled}
-                            className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                            className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-sm"
                         >
-                            AI Draft
+                            Generate AI Draft
                         </button>
                     )}
+
                     <div className="relative export-dropdown">
                         <button
                             ref={exportButtonRef}
@@ -149,7 +146,7 @@ const SessionList = ({
                                     setExportOption('menu');
                                 }
                             }}
-                            className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 shadow-sm"
                             aria-label="Export"
                             aria-expanded={exportOption === 'menu'}
                             aria-haspopup="true"
@@ -165,8 +162,10 @@ const SessionList = ({
                                 onChooseFormat={(fmt) => { setExportFormat(fmt); setExportFocusIndex(0); }}
                                 onExportScope={(scope) => {
                                     handleExport(scope, exportFormat);
+                                    toast.success(`Exporting ${scope} logs as ${exportFormat.toUpperCase()}`);
                                     setExportOption(''); setExportFormat(''); setExportFocusIndex(0);
                                 }}
+
                                 canExportSelected={!isActionDisabled}
                                 canExportFiltered={filteredAndGroupedLogs.length > 0}
                                 canExportAll={logs.length > 0}
@@ -179,37 +178,44 @@ const SessionList = ({
                 </div>
             </div>
 
-            {/* Select All Checkbox */}
-            <div className="flex items-center pb-4 border-b border-gray-200 dark:border-gray-700">
-                <input
-                    type="checkbox"
-                    id="select-all-checkbox"
-                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
-                    onChange={handleToggleSelectAll}
-                    disabled={filteredAndGroupedLogs.length === 0}
-                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="select-all-checkbox" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Select All Visible
-                </label>
+            {/* Select All Bar */}
+            <div className="flex items-center justify-between py-3 px-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg mb-4 border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center">
+                    <input
+                        type="checkbox"
+                        id="select-all-checkbox"
+                        checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
+                        onChange={handleToggleSelectAll}
+                        disabled={filteredAndGroupedLogs.length === 0}
+                        className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="select-all-checkbox" className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                        Select All Visible Tickets
+                    </label>
+                </div>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:block">
+                    {filteredAndGroupedLogs.length} Items
+                </span>
             </div>
 
             {/* Empty State */}
             {filteredAndGroupedLogs.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <List className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
-                    <p className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+                <div className="flex flex-col items-center justify-center py-16 text-center bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                    <div className="bg-white dark:bg-gray-700 p-4 rounded-full shadow-sm mb-4">
+                        <List className="w-8 h-8 text-indigo-500 dark:text-indigo-400" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
                         {logs.length === 0 ? "No time logs yet" : "No logs match your filters"}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500 max-w-sm">
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400 max-w-sm mb-6">
                         {logs.length === 0
-                            ? "Start tracking time by entering a ticket ID and clicking START above"
-                            : "Try adjusting your filters or clearing them to see more results"}
+                            ? "Start tracking time by entering a ticket ID above."
+                            : "Try adjusting your filters to see more results."}
                     </p>
                     {(statusFilter !== 'All' || dateFilter) && (
                         <button
                             onClick={() => { setStatusFilter('All'); setDateFilter(''); }}
-                            className="mt-4 px-4 py-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors text-sm font-medium"
+                            className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors text-sm font-medium"
                         >
                             Clear All Filters
                         </button>
@@ -217,32 +223,19 @@ const SessionList = ({
                 </div>
             )}
 
-            {/* Compact Table Layout */}
-            <div className="overflow-x-auto pt-4">
-                <table className="w-full border-collapse table-fixed min-w-[42rem] md:min-w-[56rem]">
-                    {/* Table Header */}
-                    <thead>
-                        <tr className="border-b-2 border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-3 px-2 w-8">
-                                <input
-                                    type="checkbox"
-                                    checked={filteredAndGroupedLogs.length > 0 && filteredAndGroupedLogs.every(g => selectedTickets.has(g.ticketId))}
-                                    onChange={handleToggleSelectAll}
-                                    disabled={filteredAndGroupedLogs.length === 0}
-                                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500"
-                                />
-                            </th>
-                            <th className="text-left py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-48">Ticket ID</th>
-                            <th className="text-right py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Total Time</th>
-                            <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sessions</th>
-                            <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-16">Status</th>
-                            <th className="text-center py-3 px-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredAndGroupedLogs.map((group) => (
+            {/* Card List Layout */}
+            <div className="space-y-4">
+                <AnimatePresence mode='popLayout'>
+                    {filteredAndGroupedLogs.map((group) => (
+                        <motion.div
+                            key={group.ticketId}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                        >
                             <TicketRow
-                                key={group.ticketId}
                                 group={group}
                                 isSelected={selectedTickets.has(group.ticketId)}
                                 onToggleSelectTicket={handleToggleSelectTicket}
@@ -263,11 +256,13 @@ const SessionList = ({
                                 setEditingSessionNoteValue={setEditingSessionNoteValue}
                                 handleUpdateSessionNote={handleUpdateSessionNote}
                                 handleDeleteClick={handleDeleteClick}
+                                handleDeleteTicketClick={handleDeleteTicketClick}
                             />
-                        ))}
-                    </tbody>
-                </table>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
             </div>
+
         </section>
     );
 };
