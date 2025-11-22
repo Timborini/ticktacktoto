@@ -88,7 +88,7 @@ const TicketRow = memo(function TicketRow({
         </div>
 
         {/* Right: Status, Time, Actions */}
-        <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6">
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-6">
 
           {/* Status Badge */}
           <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ const TicketRow = memo(function TicketRow({
           </div>
 
           {/* Total Time */}
-          <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
             <Clock className="w-4 h-4 text-gray-400" />
             <span className="font-mono font-bold text-lg">
               {format.duration(group.totalDurationMs)}
@@ -115,7 +115,7 @@ const TicketRow = memo(function TicketRow({
           </div>
 
           {/* Ticket Actions */}
-          <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-4">
+          <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-2 sm:pl-4">
             {group.isClosed ? (
               <button
                 type="button"
