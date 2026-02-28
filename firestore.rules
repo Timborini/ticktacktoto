@@ -25,29 +25,29 @@ service cloud.firestore {
     function validTimeEntryCreate(data) {
       return data.keys().hasAll(['ticketId', 'startTime', 'accumulatedMs']) &&
              validTicketId(data.ticketId) &&
-             data.startTime is number &&
+             (data.startTime is number || data.startTime is timestamp) &&
              data.accumulatedMs is number &&
              data.accumulatedMs >= 0 &&
              data.accumulatedMs < 86400000 * 30 &&  // Max 30 days
-             (!('endTime' in data) || data.endTime == null || data.endTime is number) &&
+             (!('endTime' in data) || data.endTime == null || data.endTime is number || data.endTime is timestamp) &&
              (!('note' in data) || validNote(data.note)) &&
              (!('status' in data) || data.status in ['submitted', 'unsubmitted']) &&
-             (!('createdAt' in data) || data.createdAt is number);
+             (!('createdAt' in data) || data.createdAt is number || data.createdAt is timestamp);
     }
     
     // Helper function to validate time entry data for updates (startTime can be null)
     function validTimeEntryUpdate(data) {
       return data.keys().hasAll(['ticketId', 'accumulatedMs']) &&
              validTicketId(data.ticketId) &&
-             (!('startTime' in data) || data.startTime == null || data.startTime is number) &&
+             (!('startTime' in data) || data.startTime == null || data.startTime is number || data.startTime is timestamp) &&
              data.accumulatedMs is number &&
              data.accumulatedMs >= 0 &&
              data.accumulatedMs < 86400000 * 30 &&  // Max 30 days
-             (!('endTime' in data) || data.endTime == null || data.endTime is number) &&
+             (!('endTime' in data) || data.endTime == null || data.endTime is number || data.endTime is timestamp) &&
              (!('note' in data) || validNote(data.note)) &&
              (!('status' in data) || data.status in ['submitted', 'unsubmitted']) &&
-             (!('submissionDate' in data) || data.submissionDate == null || data.submissionDate is number) &&
-             (!('createdAt' in data) || data.createdAt is number);
+             (!('submissionDate' in data) || data.submissionDate == null || data.submissionDate is number || data.submissionDate is timestamp) &&
+             (!('createdAt' in data) || data.createdAt is number || data.createdAt is timestamp);
     }
     
     // Helper function to validate ticket status data
