@@ -771,6 +771,10 @@ const App = () => {
       setTicketStatuses(statuses);
     }, (error) => {
       console.error('Firestore ticket status snapshot error:', error);
+      // Don't show fatal error for permission-denied — this is transient during auth transitions
+      if (error.code !== 'permission-denied') {
+        setFirebaseError('Failed to load ticket statuses. Check console.');
+      }
     });
 
     return () => unsubscribe();
@@ -865,7 +869,10 @@ const App = () => {
         setHasLoadedOnce(true);
       }, (error) => {
         console.error('Firestore snapshot error:', error);
-        setFirebaseError('Failed to load real-time data. Check console.');
+        // Don't show fatal error for permission-denied — this is transient during auth transitions
+        if (error.code !== 'permission-denied') {
+          setFirebaseError('Failed to load real-time data. Check console.');
+        }
         setIsLoading(false);
         setHasLoadedOnce(true);
       });
