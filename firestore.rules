@@ -80,33 +80,50 @@ service cloud.firestore {
     }
     
     match /artifacts/{appId}/users/{userId}/ticket_statuses/{statusId} {
-      // Users can read and write only their own ticket statuses
-      allow read, create, update, delete: if request.auth != null && 
-                                            request.auth.uid == userId &&
-                                            validTicketStatus(request.resource.data);
+      // Users can read and delete their own ticket statuses (no body validation needed for delete)
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can create and update only their own ticket statuses with valid data
+      allow create, update: if request.auth != null && 
+                              request.auth.uid == userId &&
+                              validTicketStatus(request.resource.data);
     }
     
-    // Public/shared data paths (read-only)
+    // Public/shared data paths
     match /artifacts/{appId}/public/data/{shareId}/time_entries/{entryId} {
       // Anyone can read shared time entries (for collaboration features)
       allow read: if true;
       
-      // Only authenticated users can write
+      // Authenticated users can create entries — must include createdBy field for ownership tracking
       allow create: if request.auth != null &&
-                    validTimeEntryCreate(request.resource.data);
+                    validTimeEntryCreate(request.resource.data) &&
+                    request.resource.data.createdBy == request.auth.uid;
       
+      // Only the creator can update their own shared entries
       allow update: if request.auth != null &&
-                    validTimeEntryUpdate(request.resource.data);
+                    validTimeEntryUpdate(request.resource.data) &&
+                    resource.data.createdBy == request.auth.uid;
       
-      allow delete: if request.auth != null;
+      // Only the creator can delete their own shared entries
+      allow delete: if request.auth != null &&
+                    resource.data.createdBy == request.auth.uid;
     }
     
     match /artifacts/{appId}/public/data/{shareId}/ticket_statuses/{statusId} {
       // Anyone can read shared ticket statuses
-      // Only the creator can write
       allow read: if true;
-      allow create, update, delete: if request.auth != null &&
-                                      validTicketStatus(request.resource.data);
+      
+      // Only the creator can write — must include createdBy field
+      allow create: if request.auth != null &&
+                      validTicketStatus(request.resource.data) &&
+                      request.resource.data.createdBy == request.auth.uid;
+      
+      allow update: if request.auth != null &&
+                      validTicketStatus(request.resource.data) &&
+                      resource.data.createdBy == request.auth.uid;
+      
+      allow delete: if request.auth != null &&
+                      resource.data.createdBy == request.auth.uid;
     }
     
     // Deny all other paths by default
@@ -115,4 +132,3 @@ service cloud.firestore {
     }
   }
 }
-

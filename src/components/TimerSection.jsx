@@ -24,12 +24,15 @@ const TimerSection = ({
 }) => {
     const [recentTickets, setRecentTickets] = useState([]);
 
-    // Load recent tickets from localStorage on mount
+    // Load recent tickets from localStorage on mount (with validation)
     useEffect(() => {
         const saved = localStorage.getItem('recentTickets');
         if (saved) {
             try {
-                setRecentTickets(JSON.parse(saved));
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.every(t => typeof t === 'string' && t.length <= 200)) {
+                    setRecentTickets(parsed.slice(0, 5));
+                }
             } catch (e) {
                 console.error("Failed to parse recent tickets from localStorage", e);
                 localStorage.removeItem('recentTickets');

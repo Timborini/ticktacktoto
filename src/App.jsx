@@ -552,10 +552,10 @@ const App = () => {
     }
   }, []);
 
-  // Load user profile from localStorage
+  // Load user profile from localStorage (with validation)
   useEffect(() => {
     const savedTitle = localStorage.getItem('userTitle');
-    if (savedTitle) {
+    if (savedTitle && typeof savedTitle === 'string' && savedTitle.length <= 200) {
       setUserTitle(savedTitle);
     }
   }, []);
@@ -569,14 +569,18 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [userTitle]);
 
-  // Load recent ticket IDs from localStorage
+  // Load recent ticket IDs from localStorage (with validation)
   useEffect(() => {
     const saved = localStorage.getItem('recentTicketIds');
     if (saved) {
       try {
-        setRecentTicketIds(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string' && id.length <= 200)) {
+          setRecentTicketIds(parsed.slice(0, 10));
+        }
       } catch (e) {
         console.error('Error loading recent tickets:', e);
+        localStorage.removeItem('recentTicketIds');
       }
     }
   }, []);
@@ -591,26 +595,27 @@ const App = () => {
     }
   }, [logs]);
 
-  // --- URL State Management: Read filters from URL on load ---
+  // --- URL State Management: Read filters from URL on load (with validation) ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Check for share ID
+    // Check for share ID — validate to prevent Firestore path injection
     const id = urlParams.get('shareId');
-    if (id) {
+    if (id && /^[a-zA-Z0-9_-]+$/.test(id) && id.length <= 100) {
       setShareId(id);
     }
 
-    // Read filter state from URL
+    // Read filter state from URL (validate before use)
     const urlStatus = urlParams.get('status');
     const urlSearch = urlParams.get('search');
     const urlDateStart = urlParams.get('dateStart');
     const urlDateEnd = urlParams.get('dateEnd');
 
-    if (urlStatus) setStatusFilter(urlStatus);
-    if (urlSearch) setSearchQuery(urlSearch);
-    if (urlDateStart) setDateRangeStart(urlDateStart);
-    if (urlDateEnd) setDateRangeEnd(urlDateEnd);
+    const validStatuses = ['All', 'Open', 'Closed', 'Submitted'];
+    if (urlStatus && validStatuses.includes(urlStatus)) setStatusFilter(urlStatus);
+    if (urlSearch && urlSearch.length <= 200) setSearchQuery(sanitizeTicketId(urlSearch));
+    if (urlDateStart && /^\d{4}-\d{2}-\d{2}$/.test(urlDateStart)) setDateRangeStart(urlDateStart);
+    if (urlDateEnd && /^\d{4}-\d{2}-\d{2}$/.test(urlDateEnd)) setDateRangeEnd(urlDateEnd);
   }, []);
 
   // --- URL State Management: Update URL when filters change ---
@@ -1362,11 +1367,17 @@ const App = () => {
   // --- Bulk Operations ---
   const [runAsync] = useAsyncAction('Failed to perform action');
 
-  const handleBulkDelete = useCallback(async () => {
-    if (!getCollectionRef || selectedSessions.size === 0) return;
+  // Bulk delete state for confirmation modal
+  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
 
-    const confirmDelete = window.confirm(`Delete ${selectedSessions.size} session(s)?`);
-    if (!confirmDelete) return;
+  const handleBulkDelete = useCallback(() => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+    setIsConfirmingBulkDelete(true);
+  }, [getCollectionRef, selectedSessions]);
+
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (!getCollectionRef || selectedSessions.size === 0) return;
+    setIsConfirmingBulkDelete(false);
 
     try {
       setIsLoading(true);
@@ -1927,7 +1938,12 @@ ${combinedReport.trim()}
           <h2 className="text-xl font-bold">Error</h2>
         </div>
         <p className="mt-2 text-sm">{firebaseError}</p>
-        <p className="mt-2 text-xs">User ID: <span className='break-all'>{userId || 'N/A'}</span>. App ID: {appId}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+        >
+          Refresh Page
+        </button>
       </div>
     );
   }
@@ -1974,6 +1990,14 @@ ${combinedReport.trim()}
         message={deleteMessage}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+        confirmText="Delete"
+      />
+      <ConfirmationModal
+        isOpen={isConfirmingBulkDelete}
+        title="Confirm Bulk Deletion"
+        message={`Are you sure you want to delete ${selectedSessions.size} session(s)? This action cannot be undone.`}
+        onConfirm={handleConfirmBulkDelete}
+        onCancel={() => setIsConfirmingBulkDelete(false)}
         confirmText="Delete"
       />
       {/* Export Confirmation Modal with three options */}
@@ -2072,7 +2096,13 @@ ${combinedReport.trim()}
               <div className="flex items-center space-x-3">
                 {user && !user.isAnonymous ? (
                   <>
-                    <img src={user.photoURL} alt={user.displayName} className="w-10 h-10 rounded-full border-2 border-indigo-500" />
+                    <img
+                      src={user.photoURL?.startsWith('https://lh3.googleusercontent.com/') ? user.photoURL : ''}
+                      alt={user.displayName || 'User'}
+                      className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
                     <div>
                       <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
                       <button onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button>
