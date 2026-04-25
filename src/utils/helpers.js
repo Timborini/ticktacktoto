@@ -16,7 +16,8 @@ export const formatTime = (ms) => {
 };
 
 /**
- * Security: Sanitize ticket ID input to prevent XSS and injection attacks
+ * Security: Sanitize ticket ID input to prevent XSS and injection attacks.
+ * Uses an allowlist approach — only permits safe characters.
  * @param {string} ticketId - Raw ticket ID input
  * @returns {string} Sanitized ticket ID
  */
@@ -24,21 +25,24 @@ export const sanitizeTicketId = (ticketId) => {
   if (!ticketId) return '';
   return ticketId
     .trim()
-    .replace(/[<>]/g, '') // Remove potentially dangerous HTML characters
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/[^\w\s\-_.#@/()[\]{}:,]/g, '') // Allowlist: word chars, spaces, common ticket ID punctuation
     .substring(0, 200); // Limit length to prevent abuse
 };
 
 /**
- * Security: Sanitize note input to prevent XSS attacks
+ * Security: Sanitize note input to prevent XSS attacks.
+ * Strips dangerous characters and protocol patterns.
  * @param {string} note - Raw note input
  * @returns {string} Sanitized note
  */
 export const sanitizeNote = (note) => {
   if (!note) return '';
   return note
-    .replace(/[<>]/g, '') // Remove potentially dangerous HTML characters
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/[<>]/g, '')                      // Remove HTML angle brackets
+    .replace(/javascript\s*:/gi, '')           // Block javascript: protocol (with optional whitespace)
+    .replace(/data\s*:/gi, '')                 // Block data: URIs
+    .replace(/vbscript\s*:/gi, '')             // Block vbscript: protocol
+    .replace(/on\w+\s*=/gi, '')                // Block inline event handlers (onclick=, onerror=, etc.)
     .substring(0, 5000); // Limit length to prevent abuse
 };
 
