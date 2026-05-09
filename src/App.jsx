@@ -10,7 +10,7 @@ import {
   getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from 'firebase/auth';
 import {
-  getFirestore, collection, query, onSnapshot,
+  getFirestore, collection, query, onSnapshot, orderBy, limit,
   doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch, setDoc
 } from 'firebase/firestore';
 
@@ -25,22 +25,14 @@ import useAsyncAction from './utils/useAsyncAction.js';
 import { formatTime, sanitizeTicketId, sanitizeNote, escapeCSV } from './utils/helpers.js';
 
 // --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
-const appId = process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
+const appId = process.env.REACT_APP_FIREBASE_APP_ID;
+if (!appId || !/^[a-zA-Z0-9_-]{1,64}$/.test(appId)) {
+  throw new Error('REACT_APP_FIREBASE_APP_ID is missing or invalid. Cannot start app.');
+}
 
-// Helper to decode base64 envs at runtime (avoids exposing raw keys in build output)
-const decodeIfBase64 = (value) => {
-  try {
-    if (!value) return value;
-    const looksBase64 = /^[A-Za-z0-9+/=]+$/.test(value) && value.length >= 40;
-    return looksBase64 ? atob(value) : value;
-  } catch {
-    return value;
-  }
-};
-
-// Firebase configuration from environment variables (no raw literals in source)
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: decodeIfBase64(process.env.REACT_APP_FIREBASE_API_KEY_BASE64) || process.env.REACT_APP_FIREBASE_API_KEY,
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
@@ -824,7 +816,7 @@ const App = () => {
 
     // When no date constraints, keep existing single real-time subscription (includes active)
     if (constraints.length === 0) {
-      const q = query(getCollectionRef);
+      const q = query(getCollectionRef, orderBy('endTime', 'desc'), limit(200));
       const unsubscribeSingle = onSnapshot(q, (snapshot) => {
         let fetchedLogs = [];
         let currentActiveLog = null;

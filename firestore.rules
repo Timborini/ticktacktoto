@@ -92,7 +92,7 @@ service cloud.firestore {
     // Public/shared data paths
     match /artifacts/{appId}/public/data/{shareId}/time_entries/{entryId} {
       // Anyone can read shared time entries (for collaboration features)
-      allow read: if true;
+      allow read: if request.auth != null;
       
       // Authenticated users can create entries — must include createdBy field for ownership tracking
       allow create: if request.auth != null &&
@@ -102,7 +102,8 @@ service cloud.firestore {
       // Only the creator can update their own shared entries
       allow update: if request.auth != null &&
                     validTimeEntryUpdate(request.resource.data) &&
-                    resource.data.createdBy == request.auth.uid;
+                    resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.createdBy == resource.data.createdBy;
       
       // Only the creator can delete their own shared entries
       allow delete: if request.auth != null &&
@@ -111,7 +112,7 @@ service cloud.firestore {
     
     match /artifacts/{appId}/public/data/{shareId}/ticket_statuses/{statusId} {
       // Anyone can read shared ticket statuses
-      allow read: if true;
+      allow read: if request.auth != null;
       
       // Only the creator can write — must include createdBy field
       allow create: if request.auth != null &&
@@ -120,7 +121,8 @@ service cloud.firestore {
       
       allow update: if request.auth != null &&
                       validTicketStatus(request.resource.data) &&
-                      resource.data.createdBy == request.auth.uid;
+                      resource.data.createdBy == request.auth.uid &&
+                      request.resource.data.createdBy == resource.data.createdBy;
       
       allow delete: if request.auth != null &&
                       resource.data.createdBy == request.auth.uid;
