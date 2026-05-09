@@ -420,7 +420,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
+    if (process.env.NODE_ENV !== 'production') console.error('Error caught by boundary:', error, errorInfo);
   }
 
   render() {
@@ -453,6 +453,15 @@ class ErrorBoundary extends React.Component {
 /**
  * Main application component for time tracking.
  */
+async function commitInChunks(db, operations) {
+  const CHUNK_SIZE = 450;
+  for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    operations.slice(i, i + CHUNK_SIZE).forEach(({ ref, data }) => batch.update(ref, data));
+    await batch.commit();
+  }
+}
+
 const App = () => {
   // --- Firebase State ---
   const [db, setDb] = useState(null);
@@ -540,7 +549,7 @@ const App = () => {
     const hasVisited = localStorage.getItem('hasVisitedTimeTracker');
     if (!hasVisited) {
       setShowWelcome(true);
-      localStorage.setItem('hasVisitedTimeTracker', 'true');
+      try { localStorage.setItem('hasVisitedTimeTracker', 'true'); } catch (e) {}
     }
   }, []);
 
@@ -556,7 +565,7 @@ const App = () => {
   useEffect(() => {
     if (!userTitle) return;
     const timer = setTimeout(() => {
-      localStorage.setItem('userTitle', userTitle);
+      try { localStorage.setItem('userTitle', userTitle); } catch (e) {}
     }, 500);
     return () => clearTimeout(timer);
   }, [userTitle]);
@@ -571,7 +580,7 @@ const App = () => {
           setRecentTicketIds(parsed.slice(0, 10));
         }
       } catch (e) {
-        console.error('Error loading recent tickets:', e);
+        if (process.env.NODE_ENV !== 'production') console.error('Error loading recent tickets:', e);
         localStorage.removeItem('recentTicketIds');
       }
     }
@@ -582,8 +591,11 @@ const App = () => {
     if (logs.length > 0) {
       const uniqueTickets = [...new Set(logs.map(log => log.ticketId))];
       const recent = uniqueTickets.slice(0, 10); // Keep last 10 unique
-      setRecentTicketIds(recent);
-      localStorage.setItem('recentTicketIds', JSON.stringify(recent));
+      setRecentTicketIds(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(recent)) return prev;
+        try { localStorage.setItem('recentTicketIds', JSON.stringify(recent)); } catch {}
+        return recent;
+      });
     }
   }, [logs]);
 
@@ -638,7 +650,7 @@ const App = () => {
     // Set a timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
       if (!authCompleted) {
-        console.error('Firebase initialization timeout');
+        if (process.env.NODE_ENV !== 'production') console.error('Firebase initialization timeout');
         setFirebaseError('Connection timeout. Please check your internet connection and refresh the page.');
         setIsLoading(false);
         setIsAuthReady(true); // Force auth ready to exit loading screen
@@ -648,7 +660,7 @@ const App = () => {
 
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.error('Firebase config missing or invalid');
+        if (process.env.NODE_ENV !== 'production') console.error('Firebase config missing or invalid');
         setFirebaseError('Firebase configuration is missing or invalid. Please replace the placeholder values in your firebaseConfig object.');
         setIsLoading(false);
         setIsAuthReady(true);
@@ -679,7 +691,7 @@ const App = () => {
             })
             .catch(err => {
               authCompleted = true;
-              console.error('Anonymous sign-in error:', err);
+              if (process.env.NODE_ENV !== 'production') console.error('Anonymous sign-in error:', err);
               setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
               setIsLoading(false);
               setIsAuthReady(true);
@@ -694,7 +706,7 @@ const App = () => {
         clearTimeout(loadingTimeout);
       };
     } catch (error) {
-      console.error('Firebase initialization error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Firebase initialization error:', error);
       setFirebaseError('Error initializing Firebase. See console.');
       setIsLoading(false);
       setIsAuthReady(true);
@@ -710,7 +722,7 @@ const App = () => {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error("Google login error:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Google login error:", error);
       setFirebaseError("Failed to sign in with Google.");
     }
   };
@@ -720,7 +732,7 @@ const App = () => {
     try {
       await signOut(auth);
     } catch (error) {
-      console.error("Logout error:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Logout error:", error);
     }
   };
 
@@ -753,16 +765,19 @@ const App = () => {
     const q = query(getTicketStatusCollectionRef);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const statuses = {};
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        if (data.ticketId) {
-          statuses[data.ticketId] = { id: doc.id, isClosed: data.isClosed || false };
-        }
+      setTicketStatuses(prev => {
+        const next = {};
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          if (data.ticketId) next[data.ticketId] = { id: doc.id, isClosed: data.isClosed || false };
+        });
+        const prevKeys = Object.keys(prev);
+        const nextKeys = Object.keys(next);
+        if (prevKeys.length === nextKeys.length && prevKeys.every(k => prev[k]?.isClosed === next[k]?.isClosed && prev[k]?.id === next[k]?.id)) return prev;
+        return next;
       });
-      setTicketStatuses(statuses);
     }, (error) => {
-      console.error('Firestore ticket status snapshot error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Firestore ticket status snapshot error:', error);
       // Don't show fatal error for permission-denied — this is transient during auth transitions
       if (error.code !== 'permission-denied') {
         setFirebaseError('Failed to load ticket statuses. Check console.');
@@ -860,7 +875,7 @@ const App = () => {
         setIsLoading(false);
         setHasLoadedOnce(true);
       }, (error) => {
-        console.error('Firestore snapshot error:', error);
+        if (process.env.NODE_ENV !== 'production') console.error('Firestore snapshot error:', error);
         // Don't show fatal error for permission-denied — this is transient during auth transitions
         if (error.code !== 'permission-denied') {
           setFirebaseError('Failed to load real-time data. Check console.');
@@ -926,7 +941,7 @@ const App = () => {
       gotRanged = true;
       recompute();
     }, (error) => {
-      console.error('Firestore ranged snapshot error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Firestore ranged snapshot error:', error);
       setFirebaseError('Failed to load ranged data. Check console.');
       gotRanged = true;
       recompute();
@@ -940,7 +955,7 @@ const App = () => {
       gotActive = true;
       recompute();
     }, (error) => {
-      console.error('Firestore active snapshot error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Firestore active snapshot error:', error);
       setFirebaseError('Failed to load active session. Check console.');
       gotActive = true;
       recompute();
@@ -950,9 +965,10 @@ const App = () => {
       unsubscribeRanged();
       unsubscribeActive();
     };
-  }, [isAuthReady, getCollectionRef, runningLogDocId, dateRangeStart, dateRangeEnd]);
+  }, [isAuthReady, getCollectionRef, dateRangeStart, dateRangeEnd]);
 
   // --- Timer Interval Effect (Optimized) ---
+  const passedMilestonesRef = useRef(new Set());
   useEffect(() => {
     let interval = null;
     if (isTimerRunning && runningLogDocId && activeLogData?.startTime) {
@@ -973,8 +989,8 @@ const App = () => {
         for (const milestone of milestones) {
           // Check if we just crossed this milestone (within 1 second)
           if (newElapsedMs >= milestone.ms && newElapsedMs < milestone.ms + 1000) {
-            if (timerMilestone !== milestone.label) {
-              setTimerMilestone(milestone.label);
+            if (!passedMilestonesRef.current.has(milestone.label)) {
+              passedMilestonesRef.current.add(milestone.label);
               toast(`⏰ Timer reached ${milestone.label}!`, {
                 icon: '🎯',
                 duration: 4000,
@@ -987,12 +1003,12 @@ const App = () => {
       updateTimer(); // Update immediately
       interval = setInterval(updateTimer, 1000); // Then update every second
     } else {
-      setTimerMilestone(null); // Reset milestone when timer stops
+      passedMilestonesRef.current = new Set(); // Reset milestone when timer stops
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerRunning, runningLogDocId, activeLogData, timerMilestone]);
+  }, [isTimerRunning, runningLogDocId, activeLogData]);
 
   // --- Effect to clear selections when filters change ---
   useEffect(() => {
@@ -1131,7 +1147,7 @@ const App = () => {
         note: sanitizeNote(currentNote),
       });
     } catch (error) {
-      console.error('Error pausing timer:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error pausing timer:', error);
       setFirebaseError('Failed to pause timer.');
     } finally {
       setIsLoading(false);
@@ -1169,7 +1185,7 @@ const App = () => {
       }
 
     } catch (error) {
-      console.error('Error stopping timer:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error stopping timer:', error);
       setFirebaseError('Failed to stop timer.');
     } finally {
       setIsLoading(false);
@@ -1192,7 +1208,7 @@ const App = () => {
       };
       await addDoc(getCollectionRef, newEntry);
     } catch (error) {
-      console.error('Error starting new timer:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error starting new timer:', error);
       setFirebaseError('Failed to start new timer.');
     } finally {
       setIsLoading(false);
@@ -1221,7 +1237,7 @@ const App = () => {
         await startNewSession(currentTicketId, currentNote);
       }
     } catch (error) {
-      console.error('Error starting/resuming timer:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error starting/resuming timer:', error);
       setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer.`);
     } finally {
       setIsLoading(false);
@@ -1270,7 +1286,7 @@ const App = () => {
       setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
       toast.success('Ticket closed', { id: loadingToast, duration: 3000 });
     } catch (error) {
-      console.error('Error closing ticket:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error closing ticket:', error);
       setFirebaseError(`Failed to close ticket ${ticketId}.`);
       toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     } finally {
@@ -1294,7 +1310,7 @@ const App = () => {
       setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
       toast.success('Ticket reopened', { id: loadingToast, duration: 3000 });
     } catch (error) {
-      console.error('Error reopening ticket:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error reopening ticket:', error);
       setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
       toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     } finally {
@@ -1337,7 +1353,7 @@ const App = () => {
             const statusDeletePromises = statusSnapshots.docs.map(doc => deleteDoc(doc.ref));
             await Promise.all(statusDeletePromises);
           } catch (statusError) {
-            console.warn("Could not delete ticket status:", statusError);
+            if (process.env.NODE_ENV !== 'production') console.warn("Could not delete ticket status:", statusError);
           }
         }
 
@@ -1348,7 +1364,7 @@ const App = () => {
         toast.success('Session deleted');
       }
     } catch (error) {
-      console.error('Error deleting:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error deleting:', error);
       setFirebaseError('Failed to delete.');
     } finally {
       setLogToDelete(null);
@@ -1386,7 +1402,7 @@ const App = () => {
         setSelectedSessions(new Set());
       }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
     } catch (error) {
-      console.error('Error deleting sessions:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error deleting sessions:', error);
       setFirebaseError('Failed to delete some sessions.');
     } finally {
       setIsLoading(false);
@@ -1408,7 +1424,7 @@ const App = () => {
       setSelectedSessions(new Set());
       toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
     } catch (error) {
-      console.error('Error updating session status:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error updating session status:', error);
       setFirebaseError('Failed to update some sessions.');
       toast.error('Failed to update some sessions');
     } finally {
@@ -1425,7 +1441,7 @@ const App = () => {
       const sessionRef = doc(getCollectionRef, sessionId);
       await updateDoc(sessionRef, { ticketId: sanitizedTicketId });
     } catch (error) {
-      console.error("Error reallocating session:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error reallocating session:", error);
       setFirebaseError("Failed to reallocate session.");
     } finally {
       setIsReallocateModalOpen(false);
@@ -1442,27 +1458,28 @@ const App = () => {
     }
 
     setIsLoading(true);
-    const batch = writeBatch(db);
 
     try {
+      const operations = [];
+
       // 1. Update all session documents
       const sessionsQuery = query(getCollectionRef, where("ticketId", "==", oldTicketId));
       const sessionSnapshots = await getDocs(sessionsQuery);
       sessionSnapshots.forEach((doc) => {
-        batch.update(doc.ref, { ticketId: sanitizedNewTicketId });
+        operations.push({ ref: doc.ref, data: { ticketId: sanitizedNewTicketId } });
       });
 
       // 2. Update the corresponding status document
       const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", oldTicketId));
       const statusSnapshots = await getDocs(statusQuery);
       statusSnapshots.forEach((doc) => {
-        batch.update(doc.ref, { ticketId: sanitizedNewTicketId });
+        operations.push({ ref: doc.ref, data: { ticketId: sanitizedNewTicketId } });
       });
 
-      await batch.commit();
+      await commitInChunks(db, operations);
 
     } catch (error) {
-      console.error("Error updating ticket ID:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error updating ticket ID:", error);
       setFirebaseError("Failed to update ticket ID. Please check the console.");
     } finally {
       setEditingTicketId(null);
@@ -1484,7 +1501,7 @@ const App = () => {
         note: sanitizedNote
       });
     } catch (error) {
-      console.error("Error updating session note:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error updating session note:", error);
       setFirebaseError("Failed to update session note. Please check the console.");
     } finally {
       setEditingSessionNote(null);
@@ -1513,22 +1530,19 @@ const App = () => {
     if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
 
     setIsLoading(true);
-    const batch = writeBatch(db);
-
     try {
+      const operations = [];
+      const now = Date.now();
       finalSessionIds.forEach(sessionId => {
         const docRef = doc(getCollectionRef, sessionId);
-        batch.update(docRef, {
-          status: 'submitted',
-          submissionDate: Date.now()
-        });
+        operations.push({ ref: docRef, data: { status: 'submitted', submissionDate: now } });
       });
-      await batch.commit();
+      await commitInChunks(db, operations);
       setSelectedTickets(new Set()); // Clear selections
       setSelectedSessions(new Set());
       setExportedSessionIds(new Set()); // Clear exported session IDs
     } catch (error) {
-      console.error("Error marking sessions as submitted:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error marking sessions as submitted:", error);
       setFirebaseError("Failed to mark sessions as submitted.");
     } finally {
       setIsLoading(false);
@@ -1591,7 +1605,7 @@ const App = () => {
         URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error('Export Failed:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Export Failed:', error);
       setFirebaseError(`Export failed: ${error.message}`);
       toast.error('Export failed');
     }
@@ -1609,23 +1623,20 @@ const App = () => {
 
     try {
       if (markAsSubmitted && exportedSessionIds.size > 0) {
-        // Mark sessions as submitted
-        const batch = writeBatch(db);
+        const operations = [];
+        const now = Date.now();
         exportedSessionIds.forEach(sessionId => {
           const sessionRef = doc(getCollectionRef, sessionId);
-          batch.update(sessionRef, {
-            status: 'submitted',
-            submissionDate: Date.now()
-          });
+          operations.push({ ref: sessionRef, data: { status: 'submitted', submissionDate: now } });
         });
-        await batch.commit();
+        await commitInChunks(db, operations);
       }
 
       // Now perform the export
       performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
 
     } catch (error) {
-      console.error('Error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Error:', error);
       setFirebaseError('Failed to update submission status.');
       toast.error('Failed to update status');
     } finally {
@@ -1649,21 +1660,17 @@ const App = () => {
     if (finalSessionIds.size === 0 || !getCollectionRef) return;
 
     setIsLoading(true);
-    const batch = writeBatch(db);
-
     try {
+      const operations = [];
       finalSessionIds.forEach(sessionId => {
         const docRef = doc(getCollectionRef, sessionId);
-        batch.update(docRef, {
-          status: 'unsubmitted',
-          submissionDate: null
-        });
+        operations.push({ ref: docRef, data: { status: 'unsubmitted', submissionDate: null } });
       });
-      await batch.commit();
+      await commitInChunks(db, operations);
       setSelectedTickets(new Set()); // Clear selections
       setSelectedSessions(new Set());
     } catch (error) {
-      console.error("Error marking sessions as unsubmitted:", error);
+      if (process.env.NODE_ENV !== 'production') console.error("Error marking sessions as unsubmitted:", error);
       setFirebaseError("Failed to mark sessions as unsubmitted.");
     } finally {
       setIsLoading(false);
@@ -2263,6 +2270,7 @@ const AppWithErrorBoundary = () => (
 );
 
 export default AppWithErrorBoundary;
+
 
 
 

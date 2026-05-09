@@ -34,7 +34,7 @@ const TimerSection = ({
                     setRecentTickets(parsed.slice(0, 5));
                 }
             } catch (e) {
-                console.error("Failed to parse recent tickets from localStorage", e);
+                if (process.env.NODE_ENV !== 'production') console.error("Failed to parse recent tickets from localStorage", e);
                 localStorage.removeItem('recentTickets');
             }
         }
@@ -54,7 +54,7 @@ const TimerSection = ({
                 ...recentTickets.filter(t => t !== idToStart)
             ].slice(0, 5); // Keep last 5 unique tickets
             setRecentTickets(newRecent);
-            localStorage.setItem('recentTickets', JSON.stringify(newRecent));
+            try { localStorage.setItem('recentTickets', JSON.stringify(newRecent)); } catch {}
         }
     };
 
@@ -276,3 +276,4 @@ const TimerSection = ({
 };
 
 export default TimerSection;
+
