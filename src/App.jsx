@@ -533,7 +533,6 @@ const App = () => {
   const exportOptionRef = useRef('');
   const exportButtonRef = useRef(null);
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
-  const [timerMilestone, setTimerMilestone] = useState(null); // For timer notifications
   const handleExportRef = useRef(null);
 
   useEffect(() => {
@@ -965,6 +964,7 @@ const App = () => {
       unsubscribeRanged();
       unsubscribeActive();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthReady, getCollectionRef, dateRangeStart, dateRangeEnd]);
 
   // --- Timer Interval Effect (Optimized) ---
