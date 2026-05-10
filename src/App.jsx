@@ -310,9 +310,10 @@ const App = () => {
       }
 
       const app = initializeApp(firebaseConfig);
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isPreviewDeploy = hostname.includes('netlify.app');
+      console.log('[AppCheck] hostname:', hostname, 'isPreviewDeploy:', isPreviewDeploy, 'hasSiteKey:', !!process.env.REACT_APP_RECAPTCHA_SITE_KEY);
       if (process.env.REACT_APP_RECAPTCHA_SITE_KEY) {
-        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-        const isPreviewDeploy = hostname.includes('netlify.app');
         if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
         if (!isPreviewDeploy) {
           try {
@@ -320,10 +321,15 @@ const App = () => {
               provider: new ReCaptchaEnterpriseProvider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
               isTokenAutoRefreshEnabled: true
             });
+            console.log('[AppCheck] initialized successfully');
           } catch (e) {
-            if (process.env.NODE_ENV !== 'production') console.error('App check init failed', e);
+            console.error('[AppCheck] init error:', e.message, e);
           }
+        } else {
+          console.log('[AppCheck] skipped on preview deploy');
         }
+      } else {
+        console.log('[AppCheck] skipped - no site key configured');
       }
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
