@@ -382,8 +382,8 @@ const App = () => {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Google login error:", error);
-      setFirebaseError("Failed to sign in with Google.");
+      console.error("Google login error:", error.code, error.message);
+      setFirebaseError(`Failed to sign in with Google: ${error.message}`);
     }
   };
 
