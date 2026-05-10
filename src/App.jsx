@@ -310,10 +310,14 @@ const App = () => {
       }
 
       const app = initializeApp(firebaseConfig);
-      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-      const isPreviewDeploy = hostname.includes('netlify.app');
-      console.log('[AppCheck] hostname:', hostname, 'isPreviewDeploy:', isPreviewDeploy, 'hasSiteKey:', !!process.env.REACT_APP_RECAPTCHA_SITE_KEY);
       if (process.env.REACT_APP_RECAPTCHA_SITE_KEY) {
+        // Skip App Check on Netlify preview deploys (dynamic hostnames not in reCAPTCHA allowlist)
+        // On production (ticktacktoto.com), App Check is enforced.
+        // To re-enable App Check: set REACT_APP_RECAPTCHA_SITE_KEY in Netlify env vars,
+        // register the key in Firebase Console → App Check (use "reCAPTCHA" provider, not Enterprise),
+        // add production domain to reCAPTCHA allowlist at google.com/recaptcha/admin.
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const isPreviewDeploy = hostname.includes('netlify.app');
         if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
         if (!isPreviewDeploy) {
           try {
@@ -321,15 +325,10 @@ const App = () => {
               provider: new ReCaptchaV3Provider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
               isTokenAutoRefreshEnabled: true
             });
-            console.log('[AppCheck] initialized successfully');
           } catch (e) {
-            console.error('[AppCheck] init error:', e.message, e);
+            // App Check init failed — app continues without enforcement
           }
-        } else {
-          console.log('[AppCheck] skipped on preview deploy');
         }
-      } else {
-        console.log('[AppCheck] skipped - no site key configured');
       }
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
@@ -383,8 +382,8 @@ const App = () => {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Google login error:", error);
-      setFirebaseError("Failed to sign in with Google.");
+      console.error("Google login error:", error.code, error.message);
+      setFirebaseError(`Failed to sign in with Google: ${error.message}`);
     }
   };
 
