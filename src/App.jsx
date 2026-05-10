@@ -383,7 +383,7 @@ const App = () => {
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error("Google login error:", error.code, error.message);
-      setFirebaseError(`Failed to sign in with Google: ${error.message}`);
+      setFirebaseError("Failed to sign in with Google.");
     }
   };
 
