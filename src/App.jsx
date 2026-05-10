@@ -311,14 +311,18 @@ const App = () => {
 
       const app = initializeApp(firebaseConfig);
       if (process.env.REACT_APP_RECAPTCHA_SITE_KEY) {
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const isPreviewDeploy = hostname.includes('netlify.app');
         if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-        try {
-          initializeAppCheck(app, {
-            provider: new ReCaptchaEnterpriseProvider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
-            isTokenAutoRefreshEnabled: true
-          });
-        } catch (e) {
-          if (process.env.NODE_ENV !== 'production') console.error('App check init failed', e);
+        if (!isPreviewDeploy) {
+          try {
+            initializeAppCheck(app, {
+              provider: new ReCaptchaEnterpriseProvider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
+              isTokenAutoRefreshEnabled: true
+            });
+          } catch (e) {
+            if (process.env.NODE_ENV !== 'production') console.error('App check init failed', e);
+          }
         }
       }
       const firestore = getFirestore(app);
