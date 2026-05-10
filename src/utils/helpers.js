@@ -31,18 +31,15 @@ export const sanitizeTicketId = (ticketId) => {
 
 /**
  * Security: Sanitize note input to prevent XSS attacks.
- * Strips dangerous characters and protocol patterns.
+ * CRITICAL: This allows most characters because we strictly rely on React's
+ * automatic plain-text escaping. NEVER use dangerouslySetInnerHTML with this value.
  * @param {string} note - Raw note input
  * @returns {string} Sanitized note
  */
 export const sanitizeNote = (note) => {
   if (!note) return '';
   return note
-    .replace(/[<>]/g, '')                      // Remove HTML angle brackets
-    .replace(/javascript\s*:/gi, '')           // Block javascript: protocol (with optional whitespace)
-    .replace(/data\s*:/gi, '')                 // Block data: URIs
-    .replace(/vbscript\s*:/gi, '')             // Block vbscript: protocol
-    .replace(/on\w+\s*=/gi, '')                // Block inline event handlers (onclick=, onerror=, etc.)
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{M}\p{S}\n\r\t]/gu, '') // Allowlist approach
     .substring(0, 5000); // Limit length to prevent abuse
 };
 
