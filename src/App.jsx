@@ -5,7 +5,7 @@ import {
 
 // --- Firebase Imports (MUST use module path for React) ---
 import { initializeApp } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import {
   getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from 'firebase/auth';
@@ -318,7 +318,7 @@ const App = () => {
         if (!isPreviewDeploy) {
           try {
             initializeAppCheck(app, {
-              provider: new ReCaptchaEnterpriseProvider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
+              provider: new ReCaptchaV3Provider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
               isTokenAutoRefreshEnabled: true
             });
             console.log('[AppCheck] initialized successfully');
