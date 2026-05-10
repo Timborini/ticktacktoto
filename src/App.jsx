@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, lazy, Suspense } from 'react';
 import {
-  AlertTriangle, Loader, X, Check, Clipboard, Sun, Moon, Info,
-  Clock, List, Pencil, CornerUpRight, Trash2, TrendingUp, Keyboard, Download, Send
+  AlertTriangle, Loader, X, Check, Sun, Moon, Info, Download
 } from 'lucide-react';
 
 // --- Firebase Imports (MUST use module path for React) ---
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import {
   getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from 'firebase/auth';
@@ -16,7 +16,7 @@ import {
 
 // --- Toast Notifications ---
 import toast, { Toaster } from 'react-hot-toast';
-import ModalBase from './components/ModalBase.jsx';
+import { InstructionsContent } from './components/InstructionsContent.jsx';
 import TimerSection from './components/TimerSection.jsx';
 import SessionList from './components/SessionList.jsx';
 import StatsDashboard from './components/StatsDashboard.jsx';
@@ -43,372 +43,11 @@ const firebaseConfig = {
 
 
 
-/**
- * Custom Confirmation Modal Component with Accessibility
- */
-const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm" }) => {
-  const confirmButtonRef = useRef(null);
+const ConfirmationModal = lazy(() => import('./components/ConfirmationModal.jsx'));
+const ReallocateModal = lazy(() => import('./components/ReallocateModal.jsx'));
+const ReportModal = lazy(() => import('./components/ReportModal.jsx'));
+const WelcomeModal = lazy(() => import('./components/WelcomeModal.jsx'));
 
-  // Focus and Escape are handled by ModalBase
-
-  if (!isOpen) return null;
-
-  const confirmButtonColor = confirmText === "Delete" ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700";
-
-  return (
-    <ModalBase
-      isOpen={isOpen}
-      onClose={confirmText === "Delete" ? onCancel : onCancel}
-      labelledBy="modal-title"
-      describedBy="modal-description"
-      initialFocusRef={confirmButtonRef}
-      sizeClass="max-w-sm"
-      backdropCanClose={confirmText !== "Delete"}
-    >
-      <h3
-        id="modal-title"
-        className={`text-xl font-bold ${confirmText === "Delete" ? "text-red-600" : "text-indigo-600 dark:text-indigo-400"} mb-3`}
-      >
-        {title}
-      </h3>
-      <div id="modal-description" className="text-gray-700 dark:text-gray-300 mb-6">{message}</div>
-      <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-          aria-label="Cancel"
-        >
-          <X className="w-4 h-4" />
-          <span>Cancel</span>
-        </button>
-        <button
-          type="button"
-          ref={confirmButtonRef}
-          onClick={onConfirm}
-          className={`flex items-center space-x-1 px-4 py-2 min-h-[44px] text-white font-semibold rounded-lg transition-colors active:scale-[0.98] ${confirmButtonColor}`}
-          aria-label={confirmText}
-        >
-          <Check className="w-4 h-4" />
-          <span>{confirmText}</span>
-        </button>
-      </div>
-    </ModalBase>
-  );
-};
-
-const ReallocateModal = ({ isOpen, onClose, sessionInfo, allTicketIds, onConfirm }) => {
-  const [newTicketId, setNewTicketId] = useState('');
-  const selectRef = useRef(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setNewTicketId('');
-    }
-  }, [isOpen, sessionInfo]);
-
-  if (!isOpen || !sessionInfo) return null;
-
-  const handleConfirm = () => {
-    if (newTicketId && newTicketId !== sessionInfo.currentTicketId) {
-      onConfirm(sessionInfo.sessionId, newTicketId);
-      onClose();
-    }
-  };
-
-  // Filter out the current ticket ID from the list of options
-  const availableTickets = allTicketIds.filter(id => id !== sessionInfo.currentTicketId);
-
-  return (
-    <ModalBase
-      isOpen={isOpen && !!sessionInfo}
-      onClose={onClose}
-      labelledBy="reallocate-title"
-      describedBy="reallocate-description"
-      initialFocusRef={selectRef}
-      sizeClass="max-w-md"
-    >
-      <h3 id="reallocate-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
-        Reallocate Session
-      </h3>
-      <p id="reallocate-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-        Move this session from <strong className="font-mono text-indigo-500">{sessionInfo?.currentTicketId}</strong> to another ticket.
-      </p>
-
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="ticket-reallocate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            New Ticket ID
-          </label>
-          <select
-            ref={selectRef}
-            id="ticket-reallocate"
-            value={newTicketId}
-            onChange={(e) => setNewTicketId(e.target.value)}
-            className="w-full p-2 min-h-[44px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            <option value="" disabled>Select a ticket...</option>
-            {availableTickets.map(ticketId => (
-              <option key={ticketId} value={ticketId}>{ticketId}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-          aria-label="Cancel"
-        >
-          <X className="w-4 h-4" />
-          <span>Cancel</span>
-        </button>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={!newTicketId || newTicketId === sessionInfo?.currentTicketId}
-          className="flex items-center justify-center space-x-1 px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Confirm Reallocation"
-        >
-          <Check className="w-4 h-4" />
-          <span>Confirm Reallocation</span>
-        </button>
-      </div>
-    </ModalBase>
-  );
-};
-
-const ReportModal = ({ isOpen, onClose, reportData, ticketId }) => {
-  const copyButtonRef = useRef(null);
-
-  // Focus and Escape are handled by ModalBase
-
-  const copyToClipboard = async () => {
-    if (!reportData?.text) return;
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(reportData.text);
-        toast.success('Copied to clipboard!');
-        return;
-      }
-    } catch { }
-    // Fallback method
-    try {
-      const tempInput = document.createElement('textarea');
-      tempInput.value = reportData.text;
-      tempInput.setAttribute('readonly', '');
-      tempInput.style.position = 'absolute';
-      tempInput.style.left = '-9999px';
-      document.body.appendChild(tempInput);
-      tempInput.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(tempInput);
-      if (successful) {
-        toast.success('Copied to clipboard!');
-      } else {
-        toast.error('Copy failed');
-      }
-    } catch {
-      toast.error('Copy failed');
-    }
-  };
-
-  return (
-    <ModalBase
-      isOpen={isOpen}
-      onClose={onClose}
-      labelledBy="report-title"
-      describedBy="report-description"
-      initialFocusRef={copyButtonRef}
-      sizeClass="max-w-xl"
-    >
-      <h3 id="report-title" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center">
-        <Send className="w-6 h-6 mr-2" /> AI Prompt for {ticketId}
-      </h3>
-      <p id="report-description" className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-        Copy this prompt and paste it into your preferred AI chat application.
-      </p>
-
-      <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600">
-        <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm">{reportData?.text}</p>
-      </div>
-      <div className="mt-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-        <button
-          type="button"
-          ref={copyButtonRef}
-          onClick={copyToClipboard}
-          disabled={!reportData?.text}
-          className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Copy to Clipboard"
-        >
-          <Clipboard className="w-4 h-4" />
-          <span>Copy to Clipboard</span>
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-          aria-label="Close"
-        >
-          Close
-        </button>
-      </div>
-    </ModalBase>
-  );
-};
-
-const InstructionsContent = () => {
-  const [expandedSection, setExpandedSection] = useState('getting-started');
-
-  const toggleSection = (section) => {
-    setExpandedSection(expandedSection === section ? null : section);
-  };
-
-  const Section = ({ id, icon: Icon, title, children }) => {
-    const isExpanded = expandedSection === id;
-
-    return (
-      <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-        <button
-          onClick={() => toggleSection(id)}
-          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
-          aria-expanded={isExpanded}
-        >
-          <h4 className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
-            <Icon className="w-4 h-4 mr-2" />
-            {title}
-          </h4>
-          <span className="text-xl text-gray-400 dark:text-gray-500 font-light">
-            {isExpanded ? '−' : '+'}
-          </span>
-        </button>
-
-        {isExpanded && (
-          <div className="px-4 pb-4 text-sm text-gray-700 dark:text-gray-300">
-            {children}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      <Section id="getting-started" icon={Clock} title="Getting Started">
-        <ul className="list-disc list-inside space-y-1.5">
-          <li><strong>Start Timer:</strong> Enter ticket ID + press <kbd className="kbd-key">Ctrl+Space</kbd> (works while typing!)</li>
-          <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
-          <li><strong>Notifications:</strong> Alerts at 30min, 1hr, 2hr, 4hr milestones</li>
-          <li><strong>Pause/Resume:</strong> Press <kbd className="kbd-key">Ctrl+Space</kbd> anytime, anywhere</li>
-        </ul>
-      </Section>
-
-      <Section id="managing" icon={List} title="Managing Logs">
-        <ul className="list-disc list-inside space-y-1.5">
-          <li><strong>Edit:</strong> Click <Pencil className="w-3 h-3 inline-block -mt-1 text-blue-500" /> to rename tickets across all sessions</li>
-          <li><strong>Reallocate:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-purple-500" /> to move sessions to different tickets</li>
-          <li><strong>Delete:</strong> Click <Trash2 className="w-3 h-3 inline-block -mt-1 text-red-500" /> to remove sessions</li>
-          <li><strong>Archive:</strong> Mark tickets as 'Closed' to filter them out</li>
-        </ul>
-      </Section>
-
-      <Section id="stats" icon={TrendingUp} title="Statistics & Insights">
-        <ul className="list-disc list-inside space-y-1.5">
-          <li>Dashboard shows total time, status breakdown, and averages</li>
-          <li>Stats update in real-time as you track</li>
-          <li>Filter by date range or search to analyze specific periods</li>
-        </ul>
-      </Section>
-
-      <Section id="advanced" icon={Check} title="Advanced Features">
-        <ul className="list-disc list-inside space-y-1.5">
-          <li><strong>Search:</strong> Find tickets instantly by ID</li>
-          <li><strong>Date Filters:</strong> Today, Last 7/30 days, or custom range</li>
-          <li><strong>Bulk Operations:</strong> Select multiple → delete or change status</li>
-          <li><strong>Export:</strong> CSV of selected/filtered/all entries</li>
-          <li><strong>Share:</strong> Filters saved in URL - share specific views!</li>
-        </ul>
-      </Section>
-
-      <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-          <div><kbd className="kbd-key">Ctrl+Space</kbd> Start/Pause (works everywhere)</div>
-          <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize (works everywhere)</div>
-          <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
-          <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
-          <div><kbd className="kbd-key">Enter</kbd> Submit forms</div>
-          <div><kbd className="kbd-key">Tab</kbd> Navigate UI</div>
-        </div>
-      </Section>
-
-      <Section id="tips" icon={Info} title="Pro Tips">
-        <ul className="list-disc list-inside space-y-1.5 text-xs">
-          <li>Profile & recent tickets saved locally</li>
-          <li>Limits: 200 chars (ticket), 5000 chars (notes)</li>
-          <li>Use bulk ops for efficiency</li>
-          <li>Data syncs via Firebase across devices</li>
-        </ul>
-      </Section>
-    </div>
-  );
-};
-
-const WelcomeModal = ({ isOpen, onClose }) => {
-  const closeButtonRef = useRef(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => closeButtonRef.current?.focus(), 100);
-
-      const handleEscape = (e) => {
-        if (e.key === 'Escape') onClose();
-      };
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="welcome-title"
-        aria-describedby="welcome-description"
-        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 overflow-y-auto max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 id="welcome-title" className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
-          Welcome to TickTackToto!
-        </h2>
-        <p id="welcome-description" className="text-gray-600 dark:text-gray-400 mb-6">
-          Here's a quick guide to get you started:
-        </p>
-
-        <InstructionsContent />
-
-        <div className="mt-8 flex justify-end">
-          <button
-            ref={closeButtonRef}
-            onClick={onClose}
-            className="px-6 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors active:scale-[0.98]"
-          >
-            Get Started
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
-/**
- * Error Boundary Component to catch and handle React errors gracefully
- */
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -464,8 +103,10 @@ async function commitInChunks(db, operations) {
 
 const App = () => {
   // --- Firebase State ---
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
+  const dbRef = useRef(null);
+  const db = dbRef.current;
+  const authRef = useRef(null);
+  const auth = authRef.current;
   const [userId, setUserId] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [user, setUser] = useState(null);
@@ -669,11 +310,25 @@ const App = () => {
       }
 
       const app = initializeApp(firebaseConfig);
+      const isRegisteredDomain = process.env.NODE_ENV === 'development' ||
+        (typeof window !== 'undefined' && process.env.REACT_APP_SITE_URL &&
+          window.location.hostname === new URL(process.env.REACT_APP_SITE_URL).hostname);
+      if (process.env.REACT_APP_RECAPTCHA_SITE_KEY && isRegisteredDomain) {
+        if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        try {
+          initializeAppCheck(app, {
+            provider: new ReCaptchaEnterpriseProvider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
+            isTokenAutoRefreshEnabled: true
+          });
+        } catch (e) {
+          if (process.env.NODE_ENV !== 'production') console.error('App check init failed', e);
+        }
+      }
       const firestore = getFirestore(app);
       const userAuth = getAuth(app);
 
-      setDb(firestore);
-      setAuth(userAuth);
+      dbRef.current = firestore;
+      authRef.current = userAuth;
 
       const unsubscribe = onAuthStateChanged(userAuth, (user) => {
         if (user) {
@@ -1989,7 +1644,8 @@ ${combinedReport.trim()}
           },
         }}
       />
-      <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
+      <Suspense fallback={null}>
+        <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <ConfirmationModal
         isOpen={isConfirmingDelete}
         title="Confirm Deletion"
@@ -2094,6 +1750,7 @@ ${combinedReport.trim()}
         allTicketIds={allTicketIds}
         onConfirm={handleReallocateSession}
       />
+      </Suspense>
 
       <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="flex justify-between items-start mb-8">
@@ -2119,7 +1776,7 @@ ${combinedReport.trim()}
                     onClick={handleGoogleLogin}
                     className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
                   >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" className="w-5 h-5" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" referrerPolicy="no-referrer" alt="Google logo" className="w-5 h-5" />
                     <span>Sign in with Google</span>
                   </button>
                 )}
