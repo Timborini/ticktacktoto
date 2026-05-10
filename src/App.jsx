@@ -310,10 +310,7 @@ const App = () => {
       }
 
       const app = initializeApp(firebaseConfig);
-      const isRegisteredDomain = process.env.NODE_ENV === 'development' ||
-        (typeof window !== 'undefined' && process.env.REACT_APP_SITE_URL &&
-          window.location.hostname === new URL(process.env.REACT_APP_SITE_URL).hostname);
-      if (process.env.REACT_APP_RECAPTCHA_SITE_KEY && isRegisteredDomain) {
+      if (process.env.REACT_APP_RECAPTCHA_SITE_KEY) {
         if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
         try {
           initializeAppCheck(app, {
