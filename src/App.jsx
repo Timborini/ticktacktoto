@@ -1,116 +1,61 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, lazy, Suspense } from 'react';
 import {
-  AlertTriangle, Loader, X, Check, Sun, Moon, Info, Download
+  AlertTriangle, Loader, X, Sun, Moon, Info
 } from 'lucide-react';
-
-// --- Firebase Imports (MUST use module path for React) ---
-import { initializeApp } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import {
-  getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
-} from 'firebase/auth';
-import {
-  getFirestore, collection, query, onSnapshot, orderBy, limit,
-  doc, updateDoc, deleteDoc, addDoc, where, getDocs, writeBatch, setDoc
+  collection, query, doc, updateDoc, deleteDoc, addDoc, where, getDocs, setDoc
 } from 'firebase/firestore';
 
-// --- Toast Notifications ---
+// --- Services & Context ---
+import { db } from './services/firebase.js';
+import { useAuth, AuthProvider } from './context/AuthContext.jsx';
+
+// --- Hooks ---
+import { useTimer } from './hooks/useTimer.js';
+import { useRecentTickets } from './hooks/useRecentTickets.js';
+import { useFilterUrlSync } from './hooks/useFilterUrlSync.js';
+import { useLogs } from './hooks/useLogs.js';
+import { useTicketStatuses } from './hooks/useTicketStatuses.js';
+
+// --- Utilities ---
 import toast, { Toaster } from 'react-hot-toast';
+import useAsyncAction from './utils/useAsyncAction.js';
+import { commitInChunks } from './utils/firestore.js';
+import { performExport } from './features/export/exportHelpers.js';
+import { formatTime, sanitizeTicketId, sanitizeNote } from './utils/helpers.js';
+import {
+  STATUS_FILTERS,
+  SESSION_STATUS,
+  STORAGE_KEYS,
+  MAX_USER_TITLE_LENGTH,
+  MAX_TICKET_ID_LENGTH,
+} from './constants.js';
+
+// --- Components ---
 import { InstructionsContent } from './components/InstructionsContent.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import TimerSection from './components/TimerSection.jsx';
 import SessionList from './components/SessionList.jsx';
 import StatsDashboard from './components/StatsDashboard.jsx';
 import FilterBar from './components/FilterBar.jsx';
-import useAsyncAction from './utils/useAsyncAction.js';
-import { formatTime, sanitizeTicketId, sanitizeNote, escapeCSV } from './utils/helpers.js';
-
-// --- Global Variable Access (MODIFIED FOR LOCAL DEVELOPMENT) ---
-const appId = process.env.REACT_APP_FIREBASE_APP_ID;
-if (!appId || !/^[a-zA-Z0-9_-]{1,64}$/.test(appId)) {
-  throw new Error('REACT_APP_FIREBASE_APP_ID is missing or invalid. Cannot start app.');
-}
-
-// Firebase configuration from environment variables
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
-};
-
-
 
 const ConfirmationModal = lazy(() => import('./components/ConfirmationModal.jsx'));
 const ReallocateModal = lazy(() => import('./components/ReallocateModal.jsx'));
 const ReportModal = lazy(() => import('./components/ReportModal.jsx'));
 const WelcomeModal = lazy(() => import('./components/WelcomeModal.jsx'));
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    if (process.env.NODE_ENV !== 'production') console.error('Error caught by boundary:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md shadow-2xl">
-            <div className="flex items-center mb-4">
-              <AlertTriangle className="h-8 w-8 text-red-500 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Something went wrong</h1>
-            </div>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              The application encountered an unexpected error. Please refresh the page to continue.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              Refresh Page
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-/**
- * Main application component for time tracking.
- */
-async function commitInChunks(db, operations) {
-  const CHUNK_SIZE = 450;
-  for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
-    const batch = writeBatch(db);
-    operations.slice(i, i + CHUNK_SIZE).forEach(({ ref, data }) => batch.update(ref, data));
-    await batch.commit();
-  }
-}
+const ExportConfirmModal = lazy(() => import('./components/ExportConfirmModal.jsx'));
 
 const App = () => {
-  // --- Firebase State ---
-  const dbRef = useRef(null);
-  const db = dbRef.current;
-  const authRef = useRef(null);
-  const auth = authRef.current;
-  const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [user, setUser] = useState(null);
-  const [firebaseError, setFirebaseError] = useState(null);
+  const { user, userId, isAuthReady, firebaseError: authError, clearFirebaseError, handleGoogleLogin, handleLogout } = useAuth();
+
+  // --- URL Sync ---
+  const {
+    statusFilter, setStatusFilter,
+    searchQuery, setSearchQuery,
+    dateRangeStart, setDateRangeStart,
+    dateRangeEnd, setDateRangeEnd,
+    shareId,
+  } = useFilterUrlSync();
 
   // --- Inline Editing State ---
   const [editingTicketId, setEditingTicketId] = useState(null);
@@ -118,36 +63,21 @@ const App = () => {
   const [editingSessionNote, setEditingSessionNote] = useState(null);
   const [editingSessionNoteValue, setEditingSessionNoteValue] = useState('');
 
-  // --- Sharing State ---
-  const [shareId, setShareId] = useState(null);
-
   // --- App State ---
-  const [logs, setLogs] = useState([]);
   const [currentTicketId, setCurrentTicketId] = useState('');
   const [currentNote, setCurrentNote] = useState('');
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [runningLogDocId, setRunningLogDocId] = useState(null);
-  const [activeLogData, setActiveLogData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [ticketStatuses, setTicketStatuses] = useState({});
   const [userTitle, setUserTitle] = useState('');
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // --- Filter & Selection State ---
-  const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dateRangeStart, setDateRangeStart] = useState('');
-  const [dateRangeEnd, setDateRangeEnd] = useState('');
   const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
-  const [exportFormat, setExportFormat] = useState(''); // Track selected format: '' | 'csv' | 'json'
-  const [exportedSessionIds, setExportedSessionIds] = useState(new Set()); // Track sessions to mark as submitted after export
-  const [pendingExport, setPendingExport] = useState(null); // Store export details for pre-confirmation
-  const [recentTicketIds, setRecentTicketIds] = useState([]);
+  const [exportFormat, setExportFormat] = useState('');
+  const [exportedSessionIds, setExportedSessionIds] = useState(new Set());
+  const [pendingExport, setPendingExport] = useState(null);
 
   // --- Modal State ---
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -160,12 +90,13 @@ const App = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [isConfirmingSubmit, setIsConfirmingSubmit] = useState(false);
-
+  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
+  const [ticketToDelete, setTicketToDelete] = useState(null);
 
   // --- Theme State ---
   const [theme, setTheme] = useState('light');
 
-  // --- Performance: Refs for stable event handler references ---
+  // --- Performance Refs ---
   const actionHandlerRef = useRef(null);
   const isButtonDisabledRef = useRef(false);
   const isStopButtonDisabledRef = useRef(false);
@@ -176,6 +107,55 @@ const App = () => {
   const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const handleExportRef = useRef(null);
 
+  // --- Firestore Collection Refs ---
+  const getCollectionRef = useMemo(() => {
+    if (db && userId) {
+      if (shareId && import.meta.env.REACT_APP_ENABLE_PUBLIC_SHARES === 'true') {
+        return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'public/data', shareId, 'time_entries');
+      }
+      return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'users', userId, 'time_entries');
+    }
+    return null;
+  }, [db, userId, shareId]);
+
+  const getTicketStatusCollectionRef = useMemo(() => {
+    if (db && userId) {
+      if (shareId && import.meta.env.REACT_APP_ENABLE_PUBLIC_SHARES === 'true') {
+        return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'public/data', shareId, 'ticket_statuses');
+      }
+      return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'users', userId, 'ticket_statuses');
+    }
+    return null;
+  }, [db, userId, shareId]);
+
+  // --- Data Hooks ---
+  const {
+    logs,
+    isLoading: logsLoading,
+    hasLoadedOnce: logsLoadedOnce,
+    firebaseError: logsError,
+    activeLog,
+    setActiveLog,
+    setFirebaseError: setLogsError,
+  } = useLogs({ db, getCollectionRef, dateRangeStart, dateRangeEnd });
+
+  const {
+    ticketStatuses,
+    setTicketStatuses,
+    firebaseError: statusesError,
+    setFirebaseError: setStatusesError,
+  } = useTicketStatuses({ getTicketStatusCollectionRef });
+
+  const timer = useTimer({ db, getCollectionRef, currentNote, ticketStatuses });
+  const { recentTicketIds, trackTicket } = useRecentTickets();
+
+  // Combine loading/error states
+  useEffect(() => {
+    setIsLoading(logsLoading);
+    setHasLoadedOnce(logsLoadedOnce);
+  }, [logsLoading, logsLoadedOnce]);
+
+  // --- Theme Effect ---
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -184,505 +164,56 @@ const App = () => {
     }
   }, [theme]);
 
-  // Check for first visit to show welcome message
+  // --- Welcome / localStorage Effects ---
   useEffect(() => {
-    const hasVisited = localStorage.getItem('hasVisitedTimeTracker');
+    const hasVisited = localStorage.getItem(STORAGE_KEYS.HAS_VISITED);
     if (!hasVisited) {
       setShowWelcome(true);
-      try { localStorage.setItem('hasVisitedTimeTracker', 'true'); } catch (e) {}
+      try { localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true'); } catch {}
     }
   }, []);
 
-  // Load user profile from localStorage (with validation)
   useEffect(() => {
-    const savedTitle = localStorage.getItem('userTitle');
-    if (savedTitle && typeof savedTitle === 'string' && savedTitle.length <= 200) {
+    const savedTitle = localStorage.getItem(STORAGE_KEYS.USER_TITLE);
+    if (savedTitle && typeof savedTitle === 'string' && savedTitle.length <= MAX_USER_TITLE_LENGTH) {
       setUserTitle(savedTitle);
     }
   }, []);
 
-  // Save user profile to localStorage with debounce
   useEffect(() => {
     if (!userTitle) return;
     const timer = setTimeout(() => {
-      try { localStorage.setItem('userTitle', userTitle); } catch (e) {}
+      try { localStorage.setItem(STORAGE_KEYS.USER_TITLE, userTitle); } catch {}
     }, 500);
     return () => clearTimeout(timer);
   }, [userTitle]);
 
-  // Load recent ticket IDs from localStorage (with validation)
+  // --- Sync active log from useLogs into timer ---
   useEffect(() => {
-    const saved = localStorage.getItem('recentTicketIds');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string' && id.length <= 200)) {
-          setRecentTicketIds(parsed.slice(0, 10));
-        }
-      } catch (e) {
-        if (process.env.NODE_ENV !== 'production') console.error('Error loading recent tickets:', e);
-        localStorage.removeItem('recentTicketIds');
-      }
-    }
-  }, []);
-
-  // Track recent ticket IDs when new sessions are created
-  useEffect(() => {
-    if (logs.length > 0) {
-      const uniqueTickets = [...new Set(logs.map(log => log.ticketId))];
-      const recent = uniqueTickets.slice(0, 10); // Keep last 10 unique
-      setRecentTicketIds(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(recent)) return prev;
-        try { localStorage.setItem('recentTicketIds', JSON.stringify(recent)); } catch {}
-        return recent;
+    if (activeLog) {
+      setCurrentTicketId(activeLog.ticketId);
+      setCurrentNote(activeLog.note || '');
+      timer.restoreSession(activeLog);
+    } else if (timer.runningLogDocId) {
+      startTransition(() => {
+        timer.clearSession();
+        setCurrentTicketId('');
+        setCurrentNote('');
       });
     }
-  }, [logs]);
+  }, [activeLog, timer]);
 
-  // --- URL State Management: Read filters from URL on load (with validation) ---
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-
-    // Check for share ID — validate to prevent Firestore path injection
-    const id = urlParams.get('shareId');
-    if (id && /^[a-zA-Z0-9_-]+$/.test(id) && id.length <= 100) {
-      setShareId(id);
-    }
-
-    // Read filter state from URL (validate before use)
-    const urlStatus = urlParams.get('status');
-    const urlSearch = urlParams.get('search');
-    const urlDateStart = urlParams.get('dateStart');
-    const urlDateEnd = urlParams.get('dateEnd');
-
-    const validStatuses = ['All', 'Open', 'Closed', 'Submitted'];
-    if (urlStatus && validStatuses.includes(urlStatus)) setStatusFilter(urlStatus);
-    if (urlSearch && urlSearch.length <= 200) setSearchQuery(sanitizeTicketId(urlSearch));
-    if (urlDateStart && /^\d{4}-\d{2}-\d{2}$/.test(urlDateStart)) setDateRangeStart(urlDateStart);
-    if (urlDateEnd && /^\d{4}-\d{2}-\d{2}$/.test(urlDateEnd)) setDateRangeEnd(urlDateEnd);
-  }, []);
-
-  // --- URL State Management: Update URL when filters change ---
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    // Preserve shareId if it exists
-    const shareId = params.get('shareId');
-    const newParams = new URLSearchParams();
-
-    if (shareId) newParams.set('shareId', shareId);
-    if (statusFilter && statusFilter !== 'All') newParams.set('status', statusFilter);
-    if (searchQuery) newParams.set('search', searchQuery);
-    if (dateRangeStart) newParams.set('dateStart', dateRangeStart);
-    if (dateRangeEnd) newParams.set('dateEnd', dateRangeEnd);
-
-    const newUrl = newParams.toString()
-      ? `${window.location.pathname}?${newParams.toString()}`
-      : window.location.pathname;
-
-    window.history.replaceState({}, '', newUrl);
-  }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd]);
-
-  // --- Firebase Initialization and Authentication ---
-  useEffect(() => {
-    let authCompleted = false;
-
-    // Set a timeout to prevent infinite loading
-    const loadingTimeout = setTimeout(() => {
-      if (!authCompleted) {
-        if (process.env.NODE_ENV !== 'production') console.error('Firebase initialization timeout');
-        setFirebaseError('Connection timeout. Please check your internet connection and refresh the page.');
-        setIsLoading(false);
-        setIsAuthReady(true); // Force auth ready to exit loading screen
-        setHasLoadedOnce(true); // Force loaded flag to exit loading screen
-      }
-    }, 10000); // 10 second timeout
-
-    try {
-      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-        if (process.env.NODE_ENV !== 'production') console.error('Firebase config missing or invalid');
-        setFirebaseError('Firebase configuration is missing or invalid. Please replace the placeholder values in your firebaseConfig object.');
-        setIsLoading(false);
-        setIsAuthReady(true);
-        setHasLoadedOnce(true);
-        clearTimeout(loadingTimeout);
-        return;
-      }
-
-      const app = initializeApp(firebaseConfig);
-      if (process.env.REACT_APP_RECAPTCHA_SITE_KEY) {
-        // Skip App Check on Netlify preview deploys (dynamic hostnames not in reCAPTCHA allowlist)
-        // On production (ticktacktoto.com), App Check is enforced.
-        // To re-enable App Check: set REACT_APP_RECAPTCHA_SITE_KEY in Netlify env vars,
-        // register the key in Firebase Console → App Check (use "reCAPTCHA" provider, not Enterprise),
-        // add production domain to reCAPTCHA allowlist at google.com/recaptcha/admin.
-        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-        const isPreviewDeploy = hostname.includes('netlify.app');
-        if (process.env.NODE_ENV === 'development') window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-        if (!isPreviewDeploy) {
-          try {
-            initializeAppCheck(app, {
-              provider: new ReCaptchaV3Provider(process.env.REACT_APP_RECAPTCHA_SITE_KEY),
-              isTokenAutoRefreshEnabled: true
-            });
-          } catch (e) {
-            // App Check init failed — app continues without enforcement
-          }
-        }
-      }
-      const firestore = getFirestore(app);
-      const userAuth = getAuth(app);
-
-      dbRef.current = firestore;
-      authRef.current = userAuth;
-
-      const unsubscribe = onAuthStateChanged(userAuth, (user) => {
-        if (user) {
-          authCompleted = true;
-          setUser(user);
-          setUserId(user.uid);
-          setIsAuthReady(true);
-          clearTimeout(loadingTimeout);
-        } else {
-          // If no user, sign in anonymously to allow app usage
-          signInAnonymously(userAuth)
-            .then(() => {
-              // Auth state will be updated by onAuthStateChanged
-            })
-            .catch(err => {
-              authCompleted = true;
-              if (process.env.NODE_ENV !== 'production') console.error('Anonymous sign-in error:', err);
-              setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
-              setIsLoading(false);
-              setIsAuthReady(true);
-              setHasLoadedOnce(true);
-              clearTimeout(loadingTimeout);
-            });
-        }
-      });
-
-      return () => {
-        unsubscribe();
-        clearTimeout(loadingTimeout);
-      };
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Firebase initialization error:', error);
-      setFirebaseError('Error initializing Firebase. See console.');
-      setIsLoading(false);
-      setIsAuthReady(true);
-      setHasLoadedOnce(true);
-      clearTimeout(loadingTimeout);
-    }
-  }, []);
-
-
-  const handleGoogleLogin = async () => {
-    if (!auth) return;
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google login error:", error.code, error.message);
-      setFirebaseError("Failed to sign in with Google.");
-    }
-  };
-
-  const handleLogout = async () => {
-    if (!auth) return;
-    try {
-      await signOut(auth);
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Logout error:", error);
-    }
-  };
-
-
-  // --- Firestore Data Path Helpers ---
-  const getCollectionRef = useMemo(() => {
-    if (db && userId) {
-      if (shareId) {
-        return collection(db, 'artifacts', appId, 'public/data', shareId, 'time_entries');
-      }
-      return collection(db, 'artifacts', appId, 'users', userId, 'time_entries');
-    }
-    return null;
-  }, [db, userId, shareId]);
-
-  const getTicketStatusCollectionRef = useMemo(() => {
-    if (db && userId) {
-      if (shareId) {
-        return collection(db, 'artifacts', appId, 'public/data', shareId, 'ticket_statuses');
-      }
-      return collection(db, 'artifacts', appId, 'users', userId, 'ticket_statuses');
-    }
-    return null;
-  }, [db, userId, shareId]);
-
-  // --- Real-time Ticket Status Listener (onSnapshot) ---
-  useEffect(() => {
-    if (!isAuthReady || !getTicketStatusCollectionRef) return;
-
-    const q = query(getTicketStatusCollectionRef);
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTicketStatuses(prev => {
-        const next = {};
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          if (data.ticketId) next[data.ticketId] = { id: doc.id, isClosed: data.isClosed || false };
-        });
-        const prevKeys = Object.keys(prev);
-        const nextKeys = Object.keys(next);
-        if (prevKeys.length === nextKeys.length && prevKeys.every(k => prev[k]?.isClosed === next[k]?.isClosed && prev[k]?.id === next[k]?.id)) return prev;
-        return next;
-      });
-    }, (error) => {
-      if (process.env.NODE_ENV !== 'production') console.error('Firestore ticket status snapshot error:', error);
-      // Don't show fatal error for permission-denied — this is transient during auth transitions
-      if (error.code !== 'permission-denied') {
-        setFirebaseError('Failed to load ticket statuses. Check console.');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [isAuthReady, getTicketStatusCollectionRef]);
-
-  // --- Real-time Log Listener (onSnapshot) ---
-  useEffect(() => {
-    if (!isAuthReady || !getCollectionRef) return;
-
-
-    setIsLoading(true);
-    const constraints = [];
-    try {
-      if (dateRangeStart) {
-        const startMs = new Date(dateRangeStart).getTime();
-        if (!Number.isNaN(startMs)) constraints.push(where('endTime', '>=', startMs));
-      }
-      if (dateRangeEnd) {
-        const endMs = new Date(dateRangeEnd).getTime() + (24 * 60 * 60 * 1000 - 1);
-        if (!Number.isNaN(endMs)) constraints.push(where('endTime', '<=', endMs));
-      }
-    } catch { }
-
-    // Helper to parse a Firestore doc into our log shape
-    const toLog = (doc) => {
-      const data = doc.data();
-      let submissionDate = null;
-      if (data.submissionDate) {
-        if (typeof data.submissionDate === 'number') {
-          submissionDate = data.submissionDate;
-        } else if (data.submissionDate.toDate) {
-          submissionDate = data.submissionDate.toDate();
-        }
-      }
-      return {
-        id: doc.id,
-        ticketId: data.ticketId || 'No Ticket ID',
-        startTime: data.startTime || null,
-        endTime: data.endTime || null,
-        accumulatedMs: data.accumulatedMs || 0,
-        note: data.note || '',
-        status: data.status || 'unsubmitted',
-        submissionDate,
-        createdAt: data.createdAt || null
-      };
-    };
-
-    // When no date constraints, keep existing single real-time subscription (includes active)
-    if (constraints.length === 0) {
-      const q = query(getCollectionRef, orderBy('endTime', 'desc'), limit(200));
-      const unsubscribeSingle = onSnapshot(q, (snapshot) => {
-        let fetchedLogs = [];
-        let currentActiveLog = null;
-
-        snapshot.docs.forEach((doc) => {
-          const log = toLog(doc);
-          if (log.endTime === null) currentActiveLog = log;
-          else fetchedLogs.push(log);
-        });
-
-        setLogs(fetchedLogs);
-
-        if (currentActiveLog) {
-          setRunningLogDocId(currentActiveLog.id);
-          setCurrentTicketId(currentActiveLog.ticketId);
-          setCurrentNote(currentActiveLog.note || '');
-          setActiveLogData(currentActiveLog);
-
-          if (currentActiveLog.startTime) {
-            setIsTimerRunning(true);
-            setIsTimerPaused(false);
-            const currentRunDuration = Date.now() - currentActiveLog.startTime;
-            setElapsedMs(currentActiveLog.accumulatedMs + currentRunDuration);
-          } else {
-            setIsTimerRunning(false);
-            setIsTimerPaused(true);
-            setElapsedMs(currentActiveLog.accumulatedMs);
-          }
-        } else if (runningLogDocId) {
-          startTransition(() => {
-            setIsTimerRunning(false);
-            setIsTimerPaused(false);
-            setRunningLogDocId(null);
-            setActiveLogData(null);
-            setCurrentTicketId('');
-            setCurrentNote('');
-            setElapsedMs(0);
-          });
-        }
-
-        setIsLoading(false);
-        setHasLoadedOnce(true);
-      }, (error) => {
-        if (process.env.NODE_ENV !== 'production') console.error('Firestore snapshot error:', error);
-        // Don't show fatal error for permission-denied — this is transient during auth transitions
-        if (error.code !== 'permission-denied') {
-          setFirebaseError('Failed to load real-time data. Check console.');
-        }
-        setIsLoading(false);
-        setHasLoadedOnce(true);
-      });
-
-      return () => unsubscribeSingle();
-    }
-
-    // With date constraints: subscribe to ranged finished sessions AND always-include active sessions
-    let rangedLogs = [];
-    let activeLog = null;
-    let gotRanged = false;
-    let gotActive = false;
-
-    const recompute = () => {
-      setLogs(rangedLogs);
-
-      if (activeLog) {
-        setRunningLogDocId(activeLog.id);
-        setCurrentTicketId(activeLog.ticketId);
-        setCurrentNote(activeLog.note || '');
-        setActiveLogData(activeLog);
-
-        if (activeLog.startTime) {
-          setIsTimerRunning(true);
-          setIsTimerPaused(false);
-          const currentRunDuration = Date.now() - activeLog.startTime;
-          setElapsedMs(activeLog.accumulatedMs + currentRunDuration);
-        } else {
-          setIsTimerRunning(false);
-          setIsTimerPaused(true);
-          setElapsedMs(activeLog.accumulatedMs);
-        }
-      } else if (runningLogDocId) {
-        startTransition(() => {
-          setIsTimerRunning(false);
-          setIsTimerPaused(false);
-          setRunningLogDocId(null);
-          setActiveLogData(null);
-          setCurrentTicketId('');
-          setCurrentNote('');
-          setElapsedMs(0);
-        });
-      }
-
-      if (gotRanged && gotActive) {
-        setIsLoading(false);
-        setHasLoadedOnce(true);
-      }
-    };
-
-    const rangedQuery = query(getCollectionRef, ...constraints);
-    const unsubscribeRanged = onSnapshot(rangedQuery, (snapshot) => {
-      rangedLogs = [];
-      snapshot.docs.forEach((doc) => {
-        const log = toLog(doc);
-        // Ranged query contains only finished sessions
-        if (log.endTime !== null) rangedLogs.push(log);
-      });
-      gotRanged = true;
-      recompute();
-    }, (error) => {
-      if (process.env.NODE_ENV !== 'production') console.error('Firestore ranged snapshot error:', error);
-      setFirebaseError('Failed to load ranged data. Check console.');
-      gotRanged = true;
-      recompute();
-    });
-
-    const activeQuery = query(getCollectionRef, where('endTime', '==', null));
-    const unsubscribeActive = onSnapshot(activeQuery, (snapshot) => {
-      // We expect 0 or 1 active session for this user
-      const first = snapshot.docs[0];
-      activeLog = first ? toLog(first) : null;
-      gotActive = true;
-      recompute();
-    }, (error) => {
-      if (process.env.NODE_ENV !== 'production') console.error('Firestore active snapshot error:', error);
-      setFirebaseError('Failed to load active session. Check console.');
-      gotActive = true;
-      recompute();
-    });
-
-    return () => {
-      unsubscribeRanged();
-      unsubscribeActive();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthReady, getCollectionRef, dateRangeStart, dateRangeEnd]);
-
-  // --- Timer Interval Effect (Optimized) ---
-  const passedMilestonesRef = useRef(new Set());
-  useEffect(() => {
-    let interval = null;
-    if (isTimerRunning && runningLogDocId && activeLogData?.startTime) {
-      // Immediate update before starting interval
-      const updateTimer = () => {
-        const currentRunDuration = Date.now() - activeLogData.startTime;
-        const newElapsedMs = activeLogData.accumulatedMs + currentRunDuration;
-        setElapsedMs(newElapsedMs);
-
-        // Check for milestones (30min, 1hr, 2hr, 4hr)
-        const milestones = [
-          { ms: 30 * 60 * 1000, label: '30 minutes' },
-          { ms: 60 * 60 * 1000, label: '1 hour' },
-          { ms: 2 * 60 * 60 * 1000, label: '2 hours' },
-          { ms: 4 * 60 * 60 * 1000, label: '4 hours' }
-        ];
-
-        for (const milestone of milestones) {
-          // Check if we just crossed this milestone (within 1 second)
-          if (newElapsedMs >= milestone.ms && newElapsedMs < milestone.ms + 1000) {
-            if (!passedMilestonesRef.current.has(milestone.label)) {
-              passedMilestonesRef.current.add(milestone.label);
-              toast(`⏰ Timer reached ${milestone.label}!`, {
-                icon: '🎯',
-                duration: 4000,
-              });
-            }
-          }
-        }
-      };
-
-      updateTimer(); // Update immediately
-      interval = setInterval(updateTimer, 1000); // Then update every second
-    } else {
-      passedMilestonesRef.current = new Set(); // Reset milestone when timer stops
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, runningLogDocId, activeLogData]);
-
-  // --- Effect to clear selections when filters change ---
+  // --- Clear selections when filters change ---
   useEffect(() => {
     setSelectedTickets(new Set());
     setSelectedSessions(new Set());
-  }, [statusFilter, dateFilter]);
+  }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd, dateFilter]);
 
-  // --- Update refs for performance optimization ---
+  // --- Export dropdown click-outside ---
   useEffect(() => {
     exportOptionRef.current = exportOption;
   }, [exportOption]);
 
-  // --- Effect to close export dropdown when clicking outside (Optimized) ---
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
@@ -698,16 +229,12 @@ const App = () => {
     }
   }, [exportOption]);
 
-  // (Removed) Keyboard navigation for export dropdown is handled within ExportMenu component
-
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
-    // Apply date filtering (single date or date range)
     let dateFilteredLogs = logs;
 
     if (dateRangeStart || dateRangeEnd) {
-      // Date range filtering
-      dateFilteredLogs = logs.filter(log => {
+      dateFilteredLogs = logs.filter((log) => {
         if (!log.endTime) return false;
         const logDate = new Date(log.endTime).toISOString().split('T')[0];
         if (dateRangeStart && logDate < dateRangeStart) return false;
@@ -715,19 +242,17 @@ const App = () => {
         return true;
       });
     } else if (dateFilter) {
-      // Single date filtering (legacy support)
-      dateFilteredLogs = logs.filter(log => {
+      dateFilteredLogs = logs.filter((log) => {
         if (!log.endTime) return false;
         const logDate = new Date(log.endTime).toISOString().split('T')[0];
         return logDate === dateFilter;
       });
     }
 
-    // Apply search filtering
     const searchFilteredLogs = searchQuery
-      ? dateFilteredLogs.filter(log =>
-        log.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      ? dateFilteredLogs.filter((log) =
+          log.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
+        )
       : dateFilteredLogs;
 
     const groups = searchFilteredLogs.reduce((acc, log) => {
@@ -742,31 +267,28 @@ const App = () => {
       }
       acc[id].totalDurationMs += log.accumulatedMs;
       acc[id].sessions.push(log);
-
       return acc;
     }, {});
 
     let groupedArray = Object.values(groups);
 
-    // Filter by 'submitted' status
-    if (statusFilter !== 'Submitted') {
-      groupedArray = groupedArray.filter(group =>
-        group.sessions.some(session => session.status !== 'submitted')
+    if (statusFilter !== STATUS_FILTERS.SUBMITTED) {
+      groupedArray = groupedArray.filter((group) =
+        group.sessions.some((session) => session.status !== SESSION_STATUS.SUBMITTED)
       );
     }
 
-    const statusFilteredGroups = statusFilter === 'All'
+    const statusFilteredGroups = statusFilter === STATUS_FILTERS.ALL
       ? groupedArray
-      : groupedArray.filter(group => {
-        if (statusFilter === 'Open') return !group.isClosed;
-        if (statusFilter === 'Closed') return group.isClosed;
-        if (statusFilter === 'Submitted') {
-          return group.sessions.every(s => s.status === 'submitted');
+      : groupedArray.filter((group) => {
+        if (statusFilter === STATUS_FILTERS.OPEN) return !group.isClosed;
+        if (statusFilter === STATUS_FILTERS.CLOSED) return group.isClosed;
+        if (statusFilter === STATUS_FILTERS.SUBMITTED) {
+          return group.sessions.every((s) => s.status === SESSION_STATUS.SUBMITTED);
         }
         return true;
       });
 
-    // Optimized sorting: Use reduce instead of Math.max with spread to reduce memory allocation
     statusFilteredGroups.sort((a, b) => {
       const lastSessionA = a.sessions.reduce((max, s) =>
         s.endTime && s.endTime > max ? s.endTime : max, 0);
@@ -774,7 +296,6 @@ const App = () => {
         s.endTime && s.endTime > max ? s.endTime : max, 0);
       return lastSessionB - lastSessionA;
     });
-
 
     return statusFilteredGroups;
   }, [logs, ticketStatuses, statusFilter, dateFilter, dateRangeStart, dateRangeEnd, searchQuery]);
@@ -784,180 +305,40 @@ const App = () => {
   }, [filteredAndGroupedLogs]);
 
   const allTicketIds = useMemo(() => {
-    const ids = new Set(logs.map(log => log.ticketId));
+    const ids = new Set(logs.map((log) => log.ticketId));
     if (currentTicketId) ids.add(currentTicketId);
     return Array.from(ids).sort();
   }, [logs, currentTicketId]);
 
-  // --- Core Timer Functions ---
-
-  const pauseTimer = useCallback(async () => {
-    if (!runningLogDocId || !isTimerRunning || !getCollectionRef || !activeLogData) {
-      return;
-    }
-
-    setIsLoading(true);
-    const stopTime = Date.now();
-    const currentRunDuration = stopTime - activeLogData.startTime;
-    const newAccumulatedMs = activeLogData.accumulatedMs + Math.max(0, currentRunDuration);
-
-    try {
-      await updateDoc(doc(getCollectionRef, runningLogDocId), {
-        startTime: null,
-        accumulatedMs: newAccumulatedMs,
-        note: sanitizeNote(currentNote),
-      });
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error pausing timer:', error);
-      setFirebaseError('Failed to pause timer.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [runningLogDocId, isTimerRunning, getCollectionRef, activeLogData, currentNote]);
-
-
-  const stopTimer = useCallback(async (isAutoOverride = false) => {
-    if (!runningLogDocId || !getCollectionRef || !activeLogData) return;
-
-    setIsLoading(true);
-    const finalStopTime = Date.now();
-    let finalAccumulatedMs = activeLogData.accumulatedMs;
-
-    if (isTimerRunning) {
-      const currentRunDuration = finalStopTime - activeLogData.startTime;
-      finalAccumulatedMs += Math.max(1000, currentRunDuration);
-    } else if (isTimerPaused) {
-      finalAccumulatedMs = activeLogData.accumulatedMs;
-      if (finalAccumulatedMs < 1000) finalAccumulatedMs = 1000;
-    }
-
-    try {
-      await updateDoc(doc(getCollectionRef, runningLogDocId), {
-        endTime: finalStopTime,
-        startTime: null,
-        accumulatedMs: finalAccumulatedMs,
-        note: sanitizeNote(currentNote),
-        status: 'unsubmitted' // Ensure new logs are unsubmitted
-      });
-
-      if (!isAutoOverride) {
-        setCurrentTicketId('');
-        setCurrentNote('');
-      }
-
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error stopping timer:', error);
-      setFirebaseError('Failed to stop timer.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [runningLogDocId, getCollectionRef, isTimerRunning, isTimerPaused, activeLogData, currentNote]);
-
-  const startNewSession = useCallback(async (ticketId, note = '') => {
-    if (!getCollectionRef) return;
-    setIsLoading(true);
-    const startTimestamp = Date.now();
-    try {
-      const newEntry = {
-        ticketId: sanitizeTicketId(ticketId),
-        startTime: startTimestamp,
-        endTime: null,
-        accumulatedMs: 0,
-        note: sanitizeNote(note),
-        status: 'unsubmitted', // Default status
-        createdAt: startTimestamp // Track when session was originally created
-      };
-      await addDoc(getCollectionRef, newEntry);
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error starting new timer:', error);
-      setFirebaseError('Failed to start new timer.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [getCollectionRef]);
-
-  const startOrResumeTimer = useCallback(async () => {
-    if (!getCollectionRef || currentTicketId.trim() === '') {
-      return;
-    }
-    if (isTimerRunning) {
-      return;
-    }
-
-    setIsLoading(true);
-    const startTimestamp = Date.now();
-
-    try {
-      if (isTimerPaused) {
-        if (!runningLogDocId) throw new Error("Paused log ID missing.");
-        await updateDoc(doc(getCollectionRef, runningLogDocId), {
-          startTime: startTimestamp,
-          note: sanitizeNote(currentNote),
-        });
-      } else {
-        await startNewSession(currentTicketId, currentNote);
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error starting/resuming timer:', error);
-      setFirebaseError(`Failed to ${isTimerPaused ? 'resume' : 'start'} timer.`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [getCollectionRef, currentTicketId, isTimerRunning, isTimerPaused, runningLogDocId, startNewSession, currentNote]);
-
-  const startNewOrOverride = useCallback(async (ticketId) => {
-    const finalTicketId = ticketId || currentTicketId;
-    if (!getCollectionRef || finalTicketId.trim() === '') {
-      return;
-    }
-
-    if (ticketStatuses[finalTicketId]?.isClosed) {
-      return;
-    }
-
-    if (isTimerRunning || isTimerPaused) {
-      await stopTimer(true);
-    }
-
-    await startNewSession(finalTicketId, '');
-
-    setCurrentTicketId(finalTicketId);
-    setCurrentNote('');
-  }, [getCollectionRef, currentTicketId, isTimerPaused, isTimerRunning, stopTimer, startNewSession, ticketStatuses]);
-
+  // --- Core Handlers ---
   const handleContinueTicket = useCallback(async (ticketId) => {
-    await startNewOrOverride(ticketId);
-  }, [startNewOrOverride]);
+    trackTicket(ticketId);
+    await timer.startNewOrOverride(ticketId);
+  }, [timer, trackTicket]);
 
   const handleCloseTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef) return;
-
     const loadingToast = toast.loading('Closing ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
     try {
-      // Use deterministic doc id = ticketId for stability
       const targetDocId = statusEntry?.id || ticketId;
       await setDoc(
         doc(getTicketStatusCollectionRef, targetDocId),
         { ticketId, isClosed: true },
         { merge: true }
       );
-      // Optimistic UI update while snapshot catches up
-      setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
+      setTicketStatuses((prev) => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
       toast.success('Ticket closed', { id: loadingToast, duration: 3000 });
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error closing ticket:', error);
-      setFirebaseError(`Failed to close ticket ${ticketId}.`);
+      if (import.meta.env.DEV) console.error('Error closing ticket:', error);
+      setStatusesError(`Failed to close ticket ${ticketId}.`);
       toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
-    } finally {
-      // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError]);
 
   const handleReopenTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef) return;
-
     const loadingToast = toast.loading('Reopening ticket...');
     const statusEntry = ticketStatuses[ticketId];
 
@@ -968,27 +349,29 @@ const App = () => {
         { ticketId, isClosed: false },
         { merge: true }
       );
-      setTicketStatuses(prev => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
+      setTicketStatuses((prev) => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
       toast.success('Ticket reopened', { id: loadingToast, duration: 3000 });
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error reopening ticket:', error);
-      setFirebaseError(`Failed to reopen ticket ${ticketId}.`);
+      if (import.meta.env.DEV) console.error('Error reopening ticket:', error);
+      setStatusesError(`Failed to reopen ticket ${ticketId}.`);
       toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
-    } finally {
-      // Do not force-dismiss here; success/error replaced the loading toast with same id.
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError]);
 
   const handleDeleteClick = useCallback((session) => {
     setLogToDelete(session);
     setIsConfirmingDelete(true);
   }, []);
 
-  const [ticketToDelete, setTicketToDelete] = useState(null);
-
   const handleDeleteTicketClick = useCallback((ticketId) => {
     setTicketToDelete(ticketId);
     setIsConfirmingDelete(true);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    setIsConfirmingDelete(false);
+    setLogToDelete(null);
+    setTicketToDelete(null);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -999,52 +382,38 @@ const App = () => {
 
     try {
       if (ticketToDelete) {
-        // Delete all sessions for the ticket
-        const sessionsQuery = query(getCollectionRef, where("ticketId", "==", ticketToDelete));
+        const sessionsQuery = query(getCollectionRef, where('ticketId', '==', ticketToDelete));
         const sessionSnapshots = await getDocs(sessionsQuery);
-
-        const deletePromises = sessionSnapshots.docs.map(doc => deleteDoc(doc.ref));
+        const deletePromises = sessionSnapshots.docs.map((d) => deleteDoc(d.ref));
         await Promise.all(deletePromises);
 
-        // Try to delete ticket status, but don't block if it fails (might be restricted)
         if (getTicketStatusCollectionRef) {
           try {
-            const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", ticketToDelete));
+            const statusQuery = query(getTicketStatusCollectionRef, where('ticketId', '==', ticketToDelete));
             const statusSnapshots = await getDocs(statusQuery);
-            const statusDeletePromises = statusSnapshots.docs.map(doc => deleteDoc(doc.ref));
+            const statusDeletePromises = statusSnapshots.docs.map((d) => deleteDoc(d.ref));
             await Promise.all(statusDeletePromises);
           } catch (statusError) {
-            if (process.env.NODE_ENV !== 'production') console.warn("Could not delete ticket status:", statusError);
+            if (import.meta.env.DEV) console.warn('Could not delete ticket status:', statusError);
           }
         }
-
         toast.success(`Deleted ticket ${ticketToDelete} and all its sessions`);
       } else if (logToDelete) {
-        // Delete single session
         await deleteDoc(doc(getCollectionRef, logToDelete.id));
         toast.success('Session deleted');
       }
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error deleting:', error);
-      setFirebaseError('Failed to delete.');
+      if (import.meta.env.DEV) console.error('Error deleting:', error);
+      setLogsError('Failed to delete.');
     } finally {
       setLogToDelete(null);
       setTicketToDelete(null);
       setIsLoading(false);
     }
-  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef]);
-
-  const handleCancelDelete = useCallback(() => {
-    setIsConfirmingDelete(false);
-    setLogToDelete(null);
-    setTicketToDelete(null);
-  }, []);
+  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef, setLogsError]);
 
   // --- Bulk Operations ---
   const [runAsync] = useAsyncAction('Failed to perform action');
-
-  // Bulk delete state for confirmation modal
-  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
 
   const handleBulkDelete = useCallback(() => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
@@ -1058,40 +427,42 @@ const App = () => {
     try {
       setIsLoading(true);
       await runAsync(async () => {
-        const deletePromises = Array.from(selectedSessions).map(sessionId => deleteDoc(doc(getCollectionRef, sessionId)));
+        const deletePromises = Array.from(selectedSessions).map((sessionId) =>
+          deleteDoc(doc(getCollectionRef, sessionId))
+        );
         await Promise.all(deletePromises);
         setSelectedSessions(new Set());
       }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error deleting sessions:', error);
-      setFirebaseError('Failed to delete some sessions.');
+      if (import.meta.env.DEV) console.error('Error deleting sessions:', error);
+      setLogsError('Failed to delete some sessions.');
     } finally {
       setIsLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, runAsync]);
+  }, [getCollectionRef, selectedSessions, runAsync, setLogsError]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
 
     setIsLoading(true);
     try {
-      const updatePromises = Array.from(selectedSessions).map(sessionId =>
+      const updatePromises = Array.from(selectedSessions).map((sessionId) =
         updateDoc(doc(getCollectionRef, sessionId), {
           status: newStatus,
-          ...(newStatus === 'submitted' ? { submissionDate: Date.now() } : {})
+          ...(newStatus === SESSION_STATUS.SUBMITTED ? { submissionDate: Date.now() } : {}),
         })
       );
       await Promise.all(updatePromises);
       setSelectedSessions(new Set());
       toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error updating session status:', error);
-      setFirebaseError('Failed to update some sessions.');
+      if (import.meta.env.DEV) console.error('Error updating session status:', error);
+      setLogsError('Failed to update some sessions.');
       toast.error('Failed to update some sessions');
     } finally {
       setIsLoading(false);
     }
-  }, [getCollectionRef, selectedSessions]);
+  }, [getCollectionRef, selectedSessions, setLogsError]);
 
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
@@ -1102,14 +473,14 @@ const App = () => {
       const sessionRef = doc(getCollectionRef, sessionId);
       await updateDoc(sessionRef, { ticketId: sanitizedTicketId });
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error reallocating session:", error);
-      setFirebaseError("Failed to reallocate session.");
+      if (import.meta.env.DEV) console.error('Error reallocating session:', error);
+      setLogsError('Failed to reallocate session.');
     } finally {
       setIsReallocateModalOpen(false);
       setReallocatingSessionInfo(null);
       setIsLoading(false);
     }
-  }, [getCollectionRef]);
+  }, [getCollectionRef, setLogsError]);
 
   const handleUpdateTicketId = useCallback(async (oldTicketId, newTicketId) => {
     const sanitizedNewTicketId = sanitizeTicketId(newTicketId);
@@ -1119,35 +490,30 @@ const App = () => {
     }
 
     setIsLoading(true);
-
     try {
       const operations = [];
-
-      // 1. Update all session documents
-      const sessionsQuery = query(getCollectionRef, where("ticketId", "==", oldTicketId));
+      const sessionsQuery = query(getCollectionRef, where('ticketId', '==', oldTicketId));
       const sessionSnapshots = await getDocs(sessionsQuery);
-      sessionSnapshots.forEach((doc) => {
-        operations.push({ ref: doc.ref, data: { ticketId: sanitizedNewTicketId } });
+      sessionSnapshots.forEach((d) => {
+        operations.push({ ref: d.ref, data: { ticketId: sanitizedNewTicketId } });
       });
 
-      // 2. Update the corresponding status document
-      const statusQuery = query(getTicketStatusCollectionRef, where("ticketId", "==", oldTicketId));
+      const statusQuery = query(getTicketStatusCollectionRef, where('ticketId', '==', oldTicketId));
       const statusSnapshots = await getDocs(statusQuery);
-      statusSnapshots.forEach((doc) => {
-        operations.push({ ref: doc.ref, data: { ticketId: sanitizedNewTicketId } });
+      statusSnapshots.forEach((d) => {
+        operations.push({ ref: d.ref, data: { ticketId: sanitizedNewTicketId } });
       });
 
       await commitInChunks(db, operations);
-
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error updating ticket ID:", error);
-      setFirebaseError("Failed to update ticket ID. Please check the console.");
+      if (import.meta.env.DEV) console.error('Error updating ticket ID:', error);
+      setLogsError('Failed to update ticket ID. Please check the console.');
     } finally {
       setEditingTicketId(null);
       setEditingTicketValue('');
       setIsLoading(false);
     }
-  }, [getCollectionRef, getTicketStatusCollectionRef, db]);
+  }, [getCollectionRef, getTicketStatusCollectionRef, db, setLogsError]);
 
   const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
     const sanitizedNote = sanitizeNote(newNote);
@@ -1158,121 +524,53 @@ const App = () => {
 
     setIsLoading(true);
     try {
-      await updateDoc(doc(getCollectionRef, sessionId), {
-        note: sanitizedNote
-      });
+      await updateDoc(doc(getCollectionRef, sessionId), { note: sanitizedNote });
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error updating session note:", error);
-      setFirebaseError("Failed to update session note. Please check the console.");
+      if (import.meta.env.DEV) console.error('Error updating session note:', error);
+      setLogsError('Failed to update session note. Please check the console.');
     } finally {
       setEditingSessionNote(null);
       setEditingSessionNoteValue('');
       setIsLoading(false);
     }
-  }, [getCollectionRef]);
+  }, [getCollectionRef, setLogsError]);
 
-  const handleMarkAsSubmitted = useCallback(async () => {
+  const getFinalSessionIds = useCallback(() => {
     const finalSessionIds = new Set(selectedSessions);
-
-    // Add from selected tickets
-    selectedTickets.forEach(ticketId => {
-      logs.forEach(log => {
-        if (log.ticketId === ticketId) {
-          finalSessionIds.add(log.id);
-        }
+    selectedTickets.forEach((ticketId) => {
+      logs.forEach((log) => {
+        if (log.ticketId === ticketId) finalSessionIds.add(log.id);
       });
     });
+    exportedSessionIds.forEach((sessionId) => finalSessionIds.add(sessionId));
+    return finalSessionIds;
+  }, [selectedSessions, selectedTickets, logs, exportedSessionIds]);
 
-    // Add from exported sessions
-    exportedSessionIds.forEach(sessionId => {
-      finalSessionIds.add(sessionId);
-    });
-
+  const handleMarkAsSubmitted = useCallback(async () => {
+    const finalSessionIds = getFinalSessionIds();
     if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
 
     setIsLoading(true);
     try {
       const operations = [];
       const now = Date.now();
-      finalSessionIds.forEach(sessionId => {
+      finalSessionIds.forEach((sessionId) => {
         const docRef = doc(getCollectionRef, sessionId);
-        operations.push({ ref: docRef, data: { status: 'submitted', submissionDate: now } });
+        operations.push({ ref: docRef, data: { status: SESSION_STATUS.SUBMITTED, submissionDate: now } });
       });
       await commitInChunks(db, operations);
-      setSelectedTickets(new Set()); // Clear selections
+      setSelectedTickets(new Set());
       setSelectedSessions(new Set());
-      setExportedSessionIds(new Set()); // Clear exported session IDs
+      setExportedSessionIds(new Set());
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error marking sessions as submitted:", error);
-      setFirebaseError("Failed to mark sessions as submitted.");
+      if (import.meta.env.DEV) console.error('Error marking sessions as submitted:', error);
+      setLogsError('Failed to mark sessions as submitted.');
     } finally {
       setIsLoading(false);
       setIsConfirmingSubmit(false);
     }
-  }, [selectedTickets, selectedSessions, exportedSessionIds, logs, getCollectionRef, db]);
+  }, [getFinalSessionIds, getCollectionRef, db, setLogsError]);
 
-  // Helper function to perform the actual export
-  const performExport = useCallback((logsToExport, reportName, format) => {
-    const today = new Date().toISOString().split('T')[0];
-
-    try {
-      if (format === 'json') {
-        // JSON Export
-        const filename = `${reportName}-${today}.json`;
-        const jsonData = logsToExport.map(log => ({
-          ticketId: log.ticketId,
-          timeWorked: formatTime(log.accumulatedMs),
-          timeWorkedMs: log.accumulatedMs,
-          note: log.note || '',
-          startDateTime: log.createdAt ? new Date(log.createdAt).toISOString() : null,
-          finishedDateTime: log.endTime ? new Date(log.endTime).toISOString() : null,
-          sessionId: log.id,
-          status: log.status,
-          submissionDate: log.submissionDate ? new Date(log.submissionDate).toISOString() : null
-        }));
-
-        const jsonContent = JSON.stringify(jsonData, null, 2);
-        const blob = new Blob([jsonContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } else {
-        // CSV Export
-        const filename = `${reportName}-${today}.csv`;
-        const headers = ["Ticket ID", "Time Worked (HH:MM:SS)", "Note", "Start Date/Time", "Finished Date/Time", "Session ID", "Status", "Submission Date"];
-        const csvRows = logsToExport.map(log => {
-          // Use secure CSV escaping to prevent formula injection
-          const formattedDuration = formatTime(log.accumulatedMs);
-          const startTime = log.createdAt ? new Date(log.createdAt).toLocaleString('en-US') : 'N/A';
-          const finishTime = log.endTime ? new Date(log.endTime).toLocaleString('en-US') : 'N/A';
-          const submissionDate = log.submissionDate ? new Date(log.submissionDate).toLocaleString('en-US') : 'N/A';
-          return [escapeCSV(log.ticketId), escapeCSV(formattedDuration), escapeCSV(log.note || ''), escapeCSV(startTime), escapeCSV(finishTime), escapeCSV(log.id), escapeCSV(log.status), escapeCSV(submissionDate)].join(',');
-        });
-
-        const csvContent = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Export Failed:', error);
-      setFirebaseError(`Export failed: ${error.message}`);
-      toast.error('Export failed');
-    }
-  }, []);
-
-  // Handler for export confirmation with three options
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
     if (!pendingExport || !getCollectionRef || !db) {
       setIsConfirmingSubmit(false);
@@ -1281,24 +579,20 @@ const App = () => {
     }
 
     setIsLoading(true);
-
     try {
       if (markAsSubmitted && exportedSessionIds.size > 0) {
         const operations = [];
         const now = Date.now();
-        exportedSessionIds.forEach(sessionId => {
+        exportedSessionIds.forEach((sessionId) => {
           const sessionRef = doc(getCollectionRef, sessionId);
-          operations.push({ ref: sessionRef, data: { status: 'submitted', submissionDate: now } });
+          operations.push({ ref: sessionRef, data: { status: SESSION_STATUS.SUBMITTED, submissionDate: now } });
         });
         await commitInChunks(db, operations);
       }
-
-      // Now perform the export
       performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
-
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error('Error:', error);
-      setFirebaseError('Failed to update submission status.');
+      if (import.meta.env.DEV) console.error('Error:', error);
+      setLogsError('Failed to update submission status.');
       toast.error('Failed to update status');
     } finally {
       setIsConfirmingSubmit(false);
@@ -1306,59 +600,49 @@ const App = () => {
       setPendingExport(null);
       setIsLoading(false);
     }
-  }, [pendingExport, exportedSessionIds, getCollectionRef, db, performExport]);
+  }, [pendingExport, exportedSessionIds, getCollectionRef, db, setLogsError]);
 
   const handleMarkAsUnsubmitted = useCallback(async () => {
-    const finalSessionIds = new Set(selectedSessions);
-    selectedTickets.forEach(ticketId => {
-      logs.forEach(log => {
-        if (log.ticketId === ticketId) {
-          finalSessionIds.add(log.id);
-        }
-      });
-    });
-
+    const finalSessionIds = getFinalSessionIds();
     if (finalSessionIds.size === 0 || !getCollectionRef) return;
 
     setIsLoading(true);
     try {
       const operations = [];
-      finalSessionIds.forEach(sessionId => {
+      finalSessionIds.forEach((sessionId) => {
         const docRef = doc(getCollectionRef, sessionId);
-        operations.push({ ref: docRef, data: { status: 'unsubmitted', submissionDate: null } });
+        operations.push({ ref: docRef, data: { status: SESSION_STATUS.UNSUBMITTED, submissionDate: null } });
       });
       await commitInChunks(db, operations);
-      setSelectedTickets(new Set()); // Clear selections
+      setSelectedTickets(new Set());
       setSelectedSessions(new Set());
     } catch (error) {
-      if (process.env.NODE_ENV !== 'production') console.error("Error marking sessions as unsubmitted:", error);
-      setFirebaseError("Failed to mark sessions as unsubmitted.");
+      if (import.meta.env.DEV) console.error('Error marking sessions as unsubmitted:', error);
+      setLogsError('Failed to mark sessions as unsubmitted.');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedTickets, selectedSessions, logs, getCollectionRef, db]);
+  }, [getFinalSessionIds, getCollectionRef, db, setLogsError]);
 
-  const handleCreateDraft = () => {
+  const handleCreateDraft = useCallback(() => {
     const finalTicketIds = new Set(selectedTickets);
-    selectedSessions.forEach(sessionId => {
-      const log = logs.find(l => l.id === sessionId);
-      if (log) {
-        finalTicketIds.add(log.ticketId);
-      }
+    selectedSessions.forEach((sessionId) => {
+      const log = logs.find((l) => l.id === sessionId);
+      if (log) finalTicketIds.add(log.ticketId);
     });
 
     if (finalTicketIds.size === 0) return;
 
-    let combinedReport = "";
+    let combinedReport = '';
     let totalTime = 0;
 
-    finalTicketIds.forEach(ticketId => {
-      const group = filteredAndGroupedLogs.find(g => g.ticketId === ticketId);
+    finalTicketIds.forEach((ticketId) => {
+      const group = filteredAndGroupedLogs.find((g) => g.ticketId === ticketId);
       if (group) {
         const allNotes = group.sessions
-          .map(s => s.note.trim())
+          .map((s) => s.note.trim())
           .filter(Boolean)
-          .map(note => `- ${note}`)
+          .map((note) => `- ${note}`)
           .join('\n') || 'No detailed notes were recorded.';
 
         totalTime += group.totalDurationMs;
@@ -1398,7 +682,7 @@ ${combinedReport.trim()}
     setReportingTicketInfo({ ticketId: draftTitle, totalDurationMs: null });
     setGeneratedReport({ text: finalPrompt.trim() });
     setIsReportModalOpen(true);
-  };
+  }, [selectedTickets, selectedSessions, logs, filteredAndGroupedLogs, userTitle]);
 
   const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
@@ -1406,7 +690,6 @@ ${combinedReport.trim()}
     let logsToExport = [];
     let reportName = 'time-report';
 
-    // Data selection logic
     switch (exportType) {
       case 'selected':
         if (selectedTickets.size === 0 && selectedSessions.size === 0) {
@@ -1415,12 +698,12 @@ ${combinedReport.trim()}
         }
 
         const finalSelectedSessions = new Set();
-        selectedSessions.forEach(sessionId => {
-          const log = logs.find(l => l.id === sessionId);
+        selectedSessions.forEach((sessionId) => {
+          const log = logs.find((l) => l.id === sessionId);
           if (log) finalSelectedSessions.add(log);
         });
-        selectedTickets.forEach(ticketId => {
-          logs.forEach(log => {
+        selectedTickets.forEach((ticketId) => {
+          logs.forEach((log) => {
             if (log.ticketId === ticketId && log.endTime) {
               finalSelectedSessions.add(log);
             }
@@ -1431,14 +714,14 @@ ${combinedReport.trim()}
         break;
 
       case 'filtered':
-        logsToExport = filteredAndGroupedLogs.flatMap(group => group.sessions);
+        logsToExport = filteredAndGroupedLogs.flatMap((group) => group.sessions);
         reportName = filteredAndGroupedLogs.length === 1
           ? filteredAndGroupedLogs[0].ticketId.replace(/[^a-z0-9]/gi, '_').toLowerCase()
           : 'filtered-report';
         break;
 
       case 'all':
-        logsToExport = logs.filter(log => log.endTime);
+        logsToExport = logs.filter((log) => log.endTime);
         reportName = 'full-report';
         break;
 
@@ -1452,35 +735,32 @@ ${combinedReport.trim()}
       return;
     }
 
-    // Check for unsubmitted items BEFORE exporting
-    const unsubmittedLogs = logsToExport.filter(log => log.status !== 'submitted');
-    if (unsubmittedLogs.length > 0 && statusFilter !== 'Submitted') {
-      // Store export details and show confirmation modal first
+    const unsubmittedLogs = logsToExport.filter((log) => log.status !== SESSION_STATUS.SUBMITTED);
+    if (unsubmittedLogs.length > 0 && statusFilter !== STATUS_FILTERS.SUBMITTED) {
       setPendingExport({
         type: exportType,
         format,
         logs: logsToExport,
         name: reportName,
-        unsubmittedCount: unsubmittedLogs.length
+        unsubmittedCount: unsubmittedLogs.length,
       });
-      setExportedSessionIds(new Set(unsubmittedLogs.map(log => log.id)));
+      setExportedSessionIds(new Set(unsubmittedLogs.map((log) => log.id)));
       setIsConfirmingSubmit(true);
       setExportOption('');
-      return; // Exit - actual export happens after user confirms
+      return;
     }
 
-    // All items already submitted or no check needed - export immediately
     performExport(logsToExport, reportName, format);
     setExportOption('');
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter, performExport]);
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
 
-  // Update handleExportRef for keyboard navigation
   useEffect(() => {
     handleExportRef.current = handleExport;
   }, [handleExport]);
 
-  const handleToggleSelectTicket = (ticketId) => {
-    setSelectedTickets(prevSelected => {
+  // --- Selection Handlers ---
+  const handleToggleSelectTicket = useCallback((ticketId) => {
+    setSelectedTickets((prevSelected) => {
       const newSelected = new Set(prevSelected);
       if (newSelected.has(ticketId)) {
         newSelected.delete(ticketId);
@@ -1489,61 +769,63 @@ ${combinedReport.trim()}
       }
       return newSelected;
     });
-  };
+  }, []);
 
-
-  const handleToggleSelectAll = () => {
-    const allVisibleTicketIds = new Set(filteredAndGroupedLogs.map(g => g.ticketId));
-    const allVisibleSelected = [...allVisibleTicketIds].every(id => selectedTickets.has(id));
+  const handleToggleSelectAll = useCallback(() => {
+    const allVisibleTicketIds = new Set(filteredAndGroupedLogs.map((g) => g.ticketId));
+    const allVisibleSelected = [...allVisibleTicketIds].every((id) => selectedTickets.has(id));
 
     if (allVisibleSelected) {
-      setSelectedTickets(prevSelected => {
+      setSelectedTickets((prevSelected) => {
         const newSelected = new Set(prevSelected);
-        allVisibleTicketIds.forEach(id => newSelected.delete(id));
+        allVisibleTicketIds.forEach((id) => newSelected.delete(id));
         return newSelected;
       });
     } else {
-      setSelectedTickets(prevSelected => new Set([...prevSelected, ...allVisibleTicketIds]));
+      setSelectedTickets((prevSelected) => new Set([...prevSelected, ...allVisibleTicketIds]));
     }
-    setSelectedSessions(new Set()); // Clear individual session selections
-  };
+    setSelectedSessions(new Set());
+  }, [filteredAndGroupedLogs, selectedTickets]);
 
+  // --- Action Button Logic ---
   const isReady = isAuthReady && userId && db;
-  const pausedTicketId = isTimerPaused ? activeLogData?.ticketId : '';
+  const pausedTicketId = timer.isTimerPaused ? timer.activeLogData?.ticketId : '';
   const inputTicketId = currentTicketId.trim();
   const isInputTicketClosed = ticketStatuses[inputTicketId]?.isClosed || false;
 
   let actionHandler;
-
-  if (isTimerRunning) {
-    actionHandler = pauseTimer;
-  } else if (isTimerPaused && inputTicketId === pausedTicketId) {
-    actionHandler = startOrResumeTimer;
+  if (timer.isTimerRunning) {
+    actionHandler = timer.pauseTimer;
+  } else if (timer.isTimerPaused && inputTicketId === pausedTicketId) {
+    actionHandler = timer.startOrResumeTimer;
   } else {
-    actionHandler = () => startNewOrOverride(inputTicketId);
+    actionHandler = () => {
+      timer.startNewOrOverride(inputTicketId);
+      trackTicket(inputTicketId);
+    };
   }
 
-  const isInputDisabled = isTimerRunning || !isReady;
-  const isButtonDisabled = !isReady || (isInputTicketClosed && !isTimerPaused && !isTimerRunning) || (currentTicketId.trim() === '' && !isTimerRunning && !isTimerPaused);
-  const isStopButtonDisabled = !isTimerRunning && !isTimerPaused;
+  const isInputDisabled = timer.isTimerRunning || !isReady;
+  const isButtonDisabled = !isReady ||
+    (isInputTicketClosed && !timer.isTimerPaused && !timer.isTimerRunning) ||
+    (currentTicketId.trim() === '' && !timer.isTimerRunning && !timer.isTimerPaused);
+  const isStopButtonDisabled = !timer.isTimerRunning && !timer.isTimerPaused;
   const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
 
-  // --- Update refs for keyboard handler optimization ---
+  // --- Keyboard Handler ---
   useEffect(() => {
     actionHandlerRef.current = actionHandler;
     isButtonDisabledRef.current = isButtonDisabled;
     isStopButtonDisabledRef.current = isStopButtonDisabled;
-    stopTimerRef.current = stopTimer;
+    stopTimerRef.current = timer.stopTimer;
     editingTicketIdRef.current = editingTicketId;
   });
 
-  // --- Optimized Keyboard Event Listener (uses refs to avoid re-registration) ---
   useEffect(() => {
     const handleKeyDown = (event) => {
       const hasModal = document.querySelector('.fixed.inset-0');
       const isEditing = editingTicketIdRef.current || editingSessionNote;
 
-      // Ctrl+Space: Start/Pause/Resume (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
         event.preventDefault();
         if (actionHandlerRef.current && !isButtonDisabledRef.current) {
@@ -1552,7 +834,6 @@ ${combinedReport.trim()}
         return;
       }
 
-      // Shift+Space: Stop & Finalize (works EVERYWHERE, even in text fields)
       if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing) {
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
@@ -1561,52 +842,25 @@ ${combinedReport.trim()}
         return;
       }
 
-      // Enter: Only works normally in inputs/modals (for form submission)
-      if (event.key === 'Enter') {
-        // Let Enter work normally in inputs, textareas, buttons, and modals
-        return;
-      }
+      if (event.key === 'Enter') return;
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [editingSessionNote]); // Include editingSessionNote in dependencies
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingSessionNote]);
 
+  // --- Render Helpers ---
+  const combinedError = authError || logsError || statusesError;
 
-  // --- Render Logic ---
-  let deleteMessage = null;
-  if (logToDelete) {
-    deleteMessage = (
-      <div>
-        <p>Are you sure you want to delete this session for ticket <strong>{logToDelete.ticketId}</strong>?</p>
-        <div className="mt-4 text-sm bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-          <p><strong>Time Worked:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
-          {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
-        </div>
-      </div>
-    );
-  } else if (ticketToDelete) {
-    const sessionsCount = logs.filter(l => l.ticketId === ticketToDelete).length;
-    deleteMessage = (
-      <div>
-        <p className="text-red-600 dark:text-red-400 font-bold mb-2">Warning: This action cannot be undone.</p>
-        <p>Are you sure you want to delete Ticket <strong>{ticketToDelete}</strong>?</p>
-        <p className="mt-2">This will permanently delete <strong>{sessionsCount}</strong> session{sessionsCount !== 1 ? 's' : ''} associated with this ticket.</p>
-      </div>
-    );
-  }
-
-  if (firebaseError) {
+  if (combinedError) {
     return (
       <div className="p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md mx-auto max-w-lg mt-8">
         <div className="flex items-center">
           <AlertTriangle className="h-6 w-6 mr-3" />
           <h2 className="text-xl font-bold">Error</h2>
         </div>
-        <p className="mt-2 text-sm">{firebaseError}</p>
+        <p className="mt-2 text-sm">{combinedError}</p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => { clearFirebaseError(); setLogsError(null); setStatusesError(null); window.location.reload(); }}
           className="mt-4 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
         >
           Refresh Page
@@ -1624,138 +878,100 @@ ${combinedReport.trim()}
     );
   }
 
+  let deleteMessage = null;
+  if (logToDelete) {
+    deleteMessage = (
+      <div>
+        <p>Are you sure you want to delete this session for ticket <strong>{logToDelete.ticketId}</strong>?</p>
+        <div className="mt-4 text-sm bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+          <p><strong>Time Worked:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
+          {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
+        </div>
+      </div>
+    );
+  } else if (ticketToDelete) {
+    const sessionsCount = logs.filter((l) => l.ticketId === ticketToDelete).length;
+    deleteMessage = (
+      <div>
+        <p className="text-red-600 dark:text-red-400 font-bold mb-2">Warning: This action cannot be undone.</p>
+        <p>Are you sure you want to delete Ticket <strong>{ticketToDelete}</strong>?</p>
+        <p className="mt-2">This will permanently delete <strong>{sessionsCount}</strong> session{sessionsCount !== 1 ? 's' : ''} associated with this ticket.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans antialiased">
       <Toaster
         position="top-right"
         toastOptions={{
           duration: 3000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-          },
-          success: {
-            duration: 2000,
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 4000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
+          style: { background: '#363636', color: '#fff' },
+          success: { duration: 2000, iconTheme: { primary: '#10b981', secondary: '#fff' } },
+          error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
       <Suspense fallback={null}>
         <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
-      <ConfirmationModal
-        isOpen={isConfirmingDelete}
-        title="Confirm Deletion"
-        message={deleteMessage}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-        confirmText="Delete"
-      />
-      <ConfirmationModal
-        isOpen={isConfirmingBulkDelete}
-        title="Confirm Bulk Deletion"
-        message={`Are you sure you want to delete ${selectedSessions.size} session(s)? This action cannot be undone.`}
-        onConfirm={handleConfirmBulkDelete}
-        onCancel={() => setIsConfirmingBulkDelete(false)}
-        confirmText="Delete"
-      />
-      {/* Export Confirmation Modal with three options */}
-      {isConfirmingSubmit && pendingExport ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="export-confirm-title"
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="export-confirm-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
-              Export Time Entries
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              You're about to export <strong>{pendingExport.logs.length} session(s)</strong>,
-              including <strong>{pendingExport.unsubmittedCount} unsubmitted</strong>.
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Would you like to mark them as submitted?
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => handleConfirmExport(true)}
-                disabled={isLoading}
-                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Export & Mark Submitted
-              </button>
-
-              <button
-                onClick={() => handleConfirmExport(false)}
-                disabled={isLoading}
-                className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export Only
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsConfirmingSubmit(false);
-                  setPendingExport(null);
-                  setExportedSessionIds(new Set());
-                }}
-                disabled={isLoading}
-                className="w-full px-4 py-2 min-h-[44px] text-gray-600 dark:text-gray-400 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
         <ConfirmationModal
-          isOpen={isConfirmingSubmit}
+          isOpen={isConfirmingDelete}
+          title="Confirm Deletion"
+          message={deleteMessage}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+          confirmText="Delete"
+        />
+        <ConfirmationModal
+          isOpen={isConfirmingBulkDelete}
+          title="Confirm Bulk Deletion"
+          message={`Are you sure you want to delete ${selectedSessions.size} session(s)? This action cannot be undone.`}
+          onConfirm={handleConfirmBulkDelete}
+          onCancel={() => setIsConfirmingBulkDelete(false)}
+          confirmText="Delete"
+        />
+
+        <ExportConfirmModal
+          isOpen={isConfirmingSubmit && !!pendingExport}
+          onClose={() => {
+            setIsConfirmingSubmit(false);
+            setPendingExport(null);
+            setExportedSessionIds(new Set());
+          }}
+          pendingExport={pendingExport}
+          exportedSessionIds={exportedSessionIds}
+          isLoading={isLoading}
+          onConfirmExport={handleConfirmExport}
+        />
+        <ConfirmationModal
+          isOpen={isConfirmingSubmit && !pendingExport}
           title="Mark as Submitted?"
           message={exportedSessionIds.size > 0
             ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
             : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
           }
           onConfirm={handleMarkAsSubmitted}
-          onCancel={() => {
-            setIsConfirmingSubmit(false);
-            setExportedSessionIds(new Set());
-          }}
+          onCancel={() => { setIsConfirmingSubmit(false); setExportedSessionIds(new Set()); }}
           confirmText="Mark as Submitted"
         />
-      )}
-      <ReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => {
-          setIsReportModalOpen(false);
-          if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== 'Submitted') {
-            setIsConfirmingSubmit(true);
-          }
-        }}
-        reportData={generatedReport}
-        ticketId={reportingTicketInfo?.ticketId}
-      />
-      <ReallocateModal
-        isOpen={isReallocateModalOpen}
-        onClose={() => setIsReallocateModalOpen(false)}
-        sessionInfo={reallocatingSessionInfo}
-        allTicketIds={allTicketIds}
-        onConfirm={handleReallocateSession}
-      />
+
+        <ReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => {
+            setIsReportModalOpen(false);
+            if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== STATUS_FILTERS.SUBMITTED) {
+              setIsConfirmingSubmit(true);
+            }
+          }}
+          reportData={generatedReport}
+          ticketId={reportingTicketInfo?.ticketId}
+        />
+        <ReallocateModal
+          isOpen={isReallocateModalOpen}
+          onClose={() => setIsReallocateModalOpen(false)}
+          sessionInfo={reallocatingSessionInfo}
+          allTicketIds={allTicketIds}
+          onConfirm={handleReallocateSession}
+        />
       </Suspense>
 
       <div className="max-w-4xl mx-auto py-8 px-4">
@@ -1832,8 +1048,8 @@ ${combinedReport.trim()}
         </header>
 
         <TimerSection
-          isTimerRunning={isTimerRunning}
-          isTimerPaused={isTimerPaused}
+          isTimerRunning={timer.isTimerRunning}
+          isTimerPaused={timer.isTimerPaused}
           userTitle={userTitle}
           setUserTitle={setUserTitle}
           currentTicketId={currentTicketId}
@@ -1843,11 +1059,11 @@ ${combinedReport.trim()}
           isInputTicketClosed={isInputTicketClosed}
           currentNote={currentNote}
           setCurrentNote={setCurrentNote}
-          elapsedMs={elapsedMs}
-          onStart={startNewOrOverride}
-          onPause={pauseTimer}
-          onResume={startOrResumeTimer}
-          onStop={stopTimer}
+          elapsedMs={timer.elapsedMs}
+          onStart={(ticketId) => { timer.startNewOrOverride(ticketId); trackTicket(ticketId); }}
+          onPause={timer.pauseTimer}
+          onResume={timer.startOrResumeTimer}
+          onStop={timer.stopTimer}
           pausedTicketId={pausedTicketId}
         />
 
@@ -1925,15 +1141,13 @@ ${combinedReport.trim()}
   );
 };
 
-// Wrap App with Error Boundary for graceful error handling
-const AppWithErrorBoundary = () => (
+// Wrap App with providers and Error Boundary for graceful error handling
+const AppWithProviders = () => (
   <ErrorBoundary>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </ErrorBoundary>
 );
 
-export default AppWithErrorBoundary;
-
-
-
-
+export default AppWithProviders;

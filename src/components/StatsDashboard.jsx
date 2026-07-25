@@ -1,13 +1,30 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Clock, CheckCircle, TrendingUp } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
+import { SESSION_STATUS } from '../constants.js';
 
 const StatsDashboard = ({
     totalFilteredTimeMs,
     filteredAndGroupedLogs,
     logs
 }) => {
-    return (
+    const submittedCount = useMemo(() =>
+        logs.filter(l => l.status === SESSION_STATUS.SUBMITTED).length,
+    [logs]);
+
+    const unsubmittedCount = useMemo(() =>
+        logs.filter(l => l.status !== SESSION_STATUS.SUBMITTED).length,
+    [logs]);
+
+    const averageSessionMs = useMemo(() => {
+        if (logs.length === 0) return 0;
+        return Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length);
+    }, [logs]);
+
+    const sessionSummary = useMemo(() => ({
+        tickets: filteredAndGroupedLogs.length,
+        sessions: filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0),
+    }), [filteredAndGroupedLogs]);    return (
         <div className="space-y-6">
             {/* Total Time - Prominent Display */}
             <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 p-6 rounded-xl shadow-md border border-indigo-200 dark:border-indigo-700">
@@ -18,7 +35,7 @@ const StatsDashboard = ({
                 <p className="text-4xl font-bold font-mono text-indigo-900 dark:text-indigo-100 mb-2">{formatTime(totalFilteredTimeMs)}</p>
                 {filteredAndGroupedLogs.length > 0 && (
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {filteredAndGroupedLogs.length} ticket(s) • {filteredAndGroupedLogs.reduce((sum, g) => sum + g.sessions.length, 0)} session(s)
+                        {sessionSummary.tickets} ticket(s) • {sessionSummary.sessions} session(s)
                     </p>
                 )}
             </div>
@@ -33,13 +50,13 @@ const StatsDashboard = ({
                     <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
                         <span className="text-lg font-bold text-green-700 dark:text-green-300">
-                            {logs.filter(l => l.status === 'submitted').length}
+                            {submittedCount}
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
                         <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                            {logs.filter(l => l.status !== 'submitted').length}
+                            {unsubmittedCount}
                         </span>
                     </div>
                 </div>
@@ -52,10 +69,7 @@ const StatsDashboard = ({
                     <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
                 </div>
                 <p className="text-2xl font-bold font-mono text-purple-900 dark:text-purple-100">
-                    {logs.length > 0
-                        ? formatTime(Math.floor(logs.reduce((sum, l) => sum + l.accumulatedMs, 0) / logs.length))
-                        : '00:00:00'
-                    }
+                    {formatTime(averageSessionMs)}
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                     Per session across all time

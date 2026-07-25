@@ -85,7 +85,7 @@ const ModalBase = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/75 p-4"
       onClick={(e) => {
         if (!backdropCanClose) return;
         if (e.target === e.currentTarget) onClose?.();
