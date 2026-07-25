@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Play, Pause, Square, History, Clock, User, Keyboard, Lock } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { motion } from 'framer-motion';
@@ -11,7 +11,7 @@ const TimerSection = ({
     currentTicketId,
     setCurrentTicketId,
     isInputDisabled,
-    recentTicketIds: propRecentTicketIds,
+    recentTicketIds,
     isInputTicketClosed,
     currentNote,
     setCurrentNote,
@@ -22,40 +22,11 @@ const TimerSection = ({
     onStop,
     pausedTicketId
 }) => {
-    const [recentTickets, setRecentTickets] = useState([]);
-
-    // Load recent tickets from localStorage on mount (with validation)
-    useEffect(() => {
-        const saved = localStorage.getItem('recentTickets');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.every(t => typeof t === 'string' && t.length <= 200)) {
-                    setRecentTickets(parsed.slice(0, 5));
-                }
-            } catch (e) {
-                if (process.env.NODE_ENV !== 'production') console.error("Failed to parse recent tickets from localStorage", e);
-                localStorage.removeItem('recentTickets');
-            }
-        }
-    }, []);
-
     const inputTicketId = currentTicketId.trim();
 
-    // Custom onStart function to update recent tickets
     const onStart = (ticketId) => {
-        // Use the passed ticketId or fall back to inputTicketId
         const idToStart = ticketId || inputTicketId;
         propOnStart(idToStart);
-
-        if (idToStart) {
-            const newRecent = [
-                idToStart,
-                ...recentTickets.filter(t => t !== idToStart)
-            ].slice(0, 5); // Keep last 5 unique tickets
-            setRecentTickets(newRecent);
-            try { localStorage.setItem('recentTickets', JSON.stringify(newRecent)); } catch {}
-        }
     };
 
     const handleRecentClick = (ticket) => {
@@ -136,11 +107,11 @@ const TimerSection = ({
                                 maxLength={200}
                                 className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
                             />
-                            <datalist id="recent-tickets-datalist">
-                                {propRecentTicketIds.map(id => (
-                                    <option key={id} value={id} />
-                                ))}
-                            </datalist>
+                        <datalist id="recent-tickets-datalist">
+                            {recentTicketIds.map(id => (
+                                <option key={id} value={id} />
+                            ))}
+                        </datalist>
                             <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                 {currentTicketId.length}/200
                             </span>
@@ -155,12 +126,12 @@ const TimerSection = ({
                         )}
 
                         {/* Recent Tickets Chips */}
-                        {recentTickets.length > 0 && (
+                        {recentTicketIds.length > 0 && (
                             <div className={`mt-3 flex flex-wrap gap-2 items-center transition-opacity duration-300 ${isTimerRunning ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase flex items-center gap-1">
                                     <History className="w-3 h-3" /> Recent:
                                 </span>
-                                {recentTickets.map(ticket => (
+                                {recentTicketIds.map(ticket => (
                                     <button
                                         key={ticket}
                                         onClick={() => handleRecentClick(ticket)}
