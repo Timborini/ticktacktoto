@@ -251,7 +251,7 @@ const App = () => {
     }
 
     const searchFilteredLogs = searchQuery
-      ? dateFilteredLogs.filter((log) =
+      ? dateFilteredLogs.filter((log) =>
           log.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
         )
       : dateFilteredLogs;
@@ -274,7 +274,7 @@ const App = () => {
     let groupedArray = Object.values(groups);
 
     if (statusFilter !== STATUS_FILTERS.SUBMITTED) {
-      groupedArray = groupedArray.filter((group) =
+      groupedArray = groupedArray.filter((group) =>
         group.sessions.some((session) => session.status !== SESSION_STATUS.SUBMITTED)
       );
     }
@@ -447,7 +447,7 @@ const App = () => {
 
     setIsLoading(true);
     try {
-      const updatePromises = Array.from(selectedSessions).map((sessionId) =
+      const updatePromises = Array.from(selectedSessions).map((sessionId) =>
         updateDoc(doc(getCollectionRef, sessionId), {
           status: newStatus,
           ...(newStatus === SESSION_STATUS.SUBMITTED ? { submissionDate: Date.now() } : {}),
