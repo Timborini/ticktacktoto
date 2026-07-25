@@ -7,8 +7,9 @@ import {
 } from 'firebase/firestore';
 
 // --- Services & Context ---
-import { db } from './services/firebase.js';
+import { db, isFirebaseConfigValid, missingFirebaseVars } from './services/firebase.js';
 import { useAuth, AuthProvider } from './context/AuthContext.jsx';
+import { ConfigError } from './components/ConfigError.jsx';
 
 // --- Hooks ---
 import { useTimer } from './hooks/useTimer.js';
@@ -1144,9 +1145,13 @@ ${combinedReport.trim()}
 // Wrap App with providers and Error Boundary for graceful error handling
 const AppWithProviders = () => (
   <ErrorBoundary>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    {!isFirebaseConfigValid ? (
+      <ConfigError missingVars={missingFirebaseVars} />
+    ) : (
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    )}
   </ErrorBoundary>
 );
 
