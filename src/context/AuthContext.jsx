@@ -23,6 +23,12 @@ export const AuthProvider = ({ children }) => {
   const [firebaseError, setFirebaseError] = useState(null);
 
   useEffect(() => {
+    if (!auth) {
+      setFirebaseError('Firebase Auth is not initialized. Check your environment variables.');
+      setIsAuthReady(true);
+      return;
+    }
+
     let authCompleted = false;
 
     const loadingTimeout = setTimeout(() => {
@@ -62,6 +68,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const handleGoogleLogin = useCallback(async () => {
+    if (!auth || !googleProvider) return;
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
@@ -71,6 +78,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    if (!auth) return;
     try {
       await signOut(auth);
     } catch (error) {
