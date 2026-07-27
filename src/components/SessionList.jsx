@@ -1,4 +1,3 @@
-import React from 'react';
 import { List, Check, RotateCcw, Trash2, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';

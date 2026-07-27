@@ -1,8 +1,7 @@
-import React from "react";
 import { Check, Download, X } from 'lucide-react';
 import ModalBase from "./ModalBase.jsx";
 
-const ExportConfirmModal = ({ isOpen, onClose, pendingExport, exportedSessionIds, isLoading, onConfirmExport }) => {
+const ExportConfirmModal = ({ isOpen, onClose, pendingExport, isLoading, onConfirmExport }) => {
   if (!pendingExport) return null;
 
   return (

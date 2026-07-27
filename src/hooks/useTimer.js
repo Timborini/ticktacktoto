@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { sanitizeTicketId, sanitizeNote } from '../utils/helpers.js';
 import { MIN_SESSION_MS, TIMER_MILESTONES } from '../constants.js';
 
-export function useTimer({ db, getCollectionRef, currentNote, ticketStatuses }) {
+export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId }) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -45,20 +45,24 @@ export function useTimer({ db, getCollectionRef, currentNote, ticketStatuses }) 
   useEffect(() => {
     let interval = null;
     if (isTimerRunning && runningLogDocId && activeLogData?.startTime) {
+      // Seed milestones already passed so a restored session doesn't re-toast them
+      const initialElapsed = activeLogData.accumulatedMs + (Date.now() - activeLogData.startTime);
+      passedMilestonesRef.current = new Set(
+        TIMER_MILESTONES.filter((m) => initialElapsed >= m.ms).map((m) => m.label)
+      );
+
       const updateTimer = () => {
         const currentRunDuration = Date.now() - activeLogData.startTime;
         const newElapsedMs = activeLogData.accumulatedMs + currentRunDuration;
         setElapsedMs(newElapsedMs);
 
         for (const milestone of TIMER_MILESTONES) {
-          if (newElapsedMs >= milestone.ms && newElapsedMs < milestone.ms + 1000) {
-            if (!passedMilestonesRef.current.has(milestone.label)) {
-              passedMilestonesRef.current.add(milestone.label);
-              toast(`⏰ Timer reached ${milestone.label}!`, {
-                icon: '🎯',
-                duration: 4000,
-              });
-            }
+          if (newElapsedMs >= milestone.ms && !passedMilestonesRef.current.has(milestone.label)) {
+            passedMilestonesRef.current.add(milestone.label);
+            toast(`⏰ Timer reached ${milestone.label}!`, {
+              icon: '🎯',
+              duration: 4000,
+            });
           }
         }
       };
@@ -92,7 +96,7 @@ export function useTimer({ db, getCollectionRef, currentNote, ticketStatuses }) 
     }
   }, [runningLogDocId, isTimerRunning, getCollectionRef, activeLogData, currentNote]);
 
-  const stopTimer = useCallback(async (isAutoOverride = false) => {
+  const stopTimer = useCallback(async () => {
     if (!runningLogDocId || !getCollectionRef || !activeLogData) return;
 
     const finalStopTime = Date.now();
@@ -133,13 +137,14 @@ export function useTimer({ db, getCollectionRef, currentNote, ticketStatuses }) 
         note: sanitizeNote(note),
         status: 'unsubmitted',
         createdAt: startTimestamp,
+        createdBy: userId,
       };
       await addDoc(getCollectionRef, newEntry);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error starting new timer:', error);
       throw error;
     }
-  }, [getCollectionRef]);
+  }, [getCollectionRef, userId]);
 
   const startOrResumeTimer = useCallback(async () => {
     if (!getCollectionRef) return;
@@ -165,7 +170,7 @@ export function useTimer({ db, getCollectionRef, currentNote, ticketStatuses }) 
     if (ticketStatuses[ticketId]?.isClosed) return;
 
     if (isTimerRunning || isTimerPaused) {
-      await stopTimer(true);
+      await stopTimer();
     }
 
     await startNewSession(ticketId, '');

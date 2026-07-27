@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Copy, Check } from 'lucide-react';
+import { reportError } from '../services/errorReporting.js';
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,9 +13,8 @@ export class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Always log in development; in production, the rendered error details are enough
-    // to avoid leaking internals to the console for casual visitors.
     if (import.meta.env.DEV) console.error('Error caught by boundary:', error, errorInfo);
+    reportError(error, { source: `ErrorBoundary:${errorInfo?.componentStack?.split('\n')[1]?.trim() || 'unknown'}` });
   }
 
   handleCopy = async () => {

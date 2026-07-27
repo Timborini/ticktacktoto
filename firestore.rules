@@ -63,15 +63,27 @@ service cloud.firestore {
              data.isClosed is bool;
     }
 
+    // Helper function to validate error report data
+    function validErrorReport(data) {
+      return data.keys().hasAll(['message', 'source', 'createdAt']) &&
+             validStringLength(data.message, 2000) &&
+             validStringLength(data.source, 200) &&
+             data.createdAt is number &&
+             (!('stack' in data) || validStringLength(data.stack, 8000)) &&
+             (!('url' in data) || validStringLength(data.url, 500)) &&
+             (!('userAgent' in data) || validStringLength(data.userAgent, 500)) &&
+             (!('userId' in data) || data.userId == null || data.userId == request.auth.uid);
+    }
+
     // Check if an authenticated user is a member of a public share.
-    // The share document must exist at /artifacts/{appId}/public/shares/{shareId}
+    // The share document must exist at /artifacts/{appId}/public_shares/{shareId}
     // and contain a `members` array that includes the requesting user's UID.
-    function isShareMember(shareId) {
+    function isShareMember(appId, shareId) {
       return validShareId(shareId) &&
              request.auth != null &&
-             exists(/databases/$(database)/documents/artifacts/$(appId)/public/shares/$(shareId)) &&
-             get(/databases/$(database)/documents/artifacts/$(appId)/public/shares/$(shareId)).data.members is list &&
-             request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/shares/$(shareId)).data.members;
+             exists(/databases/$(database)/documents/artifacts/$(appId)/public_shares/$(shareId)) &&
+             get(/databases/$(database)/documents/artifacts/$(appId)/public_shares/$(shareId)).data.members is list &&
+             request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public_shares/$(shareId)).data.members;
     }
 
     // User-specific data paths
@@ -106,52 +118,69 @@ service cloud.firestore {
     // Public/shared data paths
     // Access is disabled by default unless a share document exists and lists the
     // requesting user as a member. To enable sharing, create a document at
-    // /artifacts/{appId}/public/shares/{shareId} with { members: ["uid1", "uid2"] }.
-    match /artifacts/{appId}/public/data/{shareId}/time_entries/{entryId} {
-      allow read: if isShareMember(shareId);
+    // /artifacts/{appId}/public_shares/{shareId} with { members: ["uid1", "uid2"] }.
+    match /artifacts/{appId}/public_data/{shareId}/time_entries/{entryId} {
+      allow read: if isShareMember(appId, shareId);
 
-      allow create: if isShareMember(shareId) &&
+      allow create: if isShareMember(appId, shareId) &&
                        request.resource.data.createdBy == request.auth.uid &&
                        validTimeEntryCreate(request.resource.data);
 
-      allow update: if isShareMember(shareId) &&
+      allow update: if isShareMember(appId, shareId) &&
                        validTimeEntryUpdate(request.resource.data) &&
                        resource.data.createdBy == request.auth.uid &&
                        request.resource.data.createdBy == resource.data.createdBy;
 
-      allow delete: if isShareMember(shareId) &&
+      allow delete: if isShareMember(appId, shareId) &&
                        resource.data.createdBy == request.auth.uid;
     }
 
-    match /artifacts/{appId}/public/data/{shareId}/ticket_statuses/{statusId} {
-      allow read: if isShareMember(shareId);
+    match /artifacts/{appId}/public_data/{shareId}/ticket_statuses/{statusId} {
+      allow read: if isShareMember(appId, shareId);
 
-      allow create: if isShareMember(shareId) &&
+      allow create: if isShareMember(appId, shareId) &&
                        validTicketStatus(request.resource.data) &&
                        request.resource.data.createdBy == request.auth.uid;
 
-      allow update: if isShareMember(shareId) &&
+      allow update: if isShareMember(appId, shareId) &&
                        validTicketStatus(request.resource.data) &&
                        resource.data.createdBy == request.auth.uid &&
                        request.resource.data.createdBy == resource.data.createdBy;
 
-      allow delete: if isShareMember(shareId) &&
+      allow delete: if isShareMember(appId, shareId) &&
                        resource.data.createdBy == request.auth.uid;
     }
 
     // Public share metadata documents
-    match /artifacts/{appId}/public/shares/{shareId} {
+    match /artifacts/{appId}/public_shares/{shareId} {
       // Only the user creating the share can create it, and they must be in members.
+      // createdBy is required so ownership is enforceable later.
       allow create: if validShareId(shareId) &&
                        request.auth != null &&
+                       request.resource.data.createdBy == request.auth.uid &&
                        request.resource.data.members is list &&
                        request.auth.uid in request.resource.data.members;
 
-      // Members can read/update their share metadata.
-      allow read, update: if isShareMember(shareId);
+      // Members can read share metadata.
+      allow read: if isShareMember(appId, shareId);
 
-      // Only a member can delete the share.
-      allow delete: if isShareMember(shareId);
+      // Only members can update, ownership cannot be transferred, and the
+      // owner can never be removed from the members list.
+      allow update: if isShareMember(appId, shareId) &&
+                       request.resource.data.createdBy == resource.data.createdBy &&
+                       request.resource.data.members is list &&
+                       resource.data.createdBy in request.resource.data.members;
+
+      // Only the owner can delete the share.
+      allow delete: if request.auth != null &&
+                       resource.data.createdBy == request.auth.uid;
+    }
+
+    // Error monitoring: clients may only create reports; reading, updating,
+    // and deleting is denied (managed via console/admin tooling only).
+    match /artifacts/{appId}/error_reports/{reportId} {
+      allow create: if request.auth != null && validErrorReport(request.resource.data);
+      allow read, update, delete: if false;
     }
 
     // Deny all other paths by default

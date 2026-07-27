@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import { useRef } from "react";
 import { Clipboard, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import ModalBase from "./ModalBase.jsx";

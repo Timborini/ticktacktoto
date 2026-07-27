@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { Pencil, Check, Repeat, Lock, CornerUpRight, Trash2, BookOpen, Clock, Calendar } from 'lucide-react';
 import { format } from './formatters';
 

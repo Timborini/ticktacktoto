@@ -1,4 +1,3 @@
-import React from 'react';
 import { Play, Pause, Square, History, Clock, User, Keyboard, Lock } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { motion } from 'framer-motion';
