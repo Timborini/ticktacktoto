@@ -24,3 +24,7 @@ yarn-debug.log*
 yarn-error.log*
 query.py
 antigravity_session_bc1efa12.md
+
+# Emulator artifacts
+firestore-debug.log
+firebase-debug.log

@@ -13,6 +13,7 @@ export const BATCH_CHUNK_SIZE = 450;
 
 // Query limits
 export const LOGS_QUERY_LIMIT = 200;
+export const RANGED_LOGS_QUERY_LIMIT = 500;
 
 // Timer milestones (in milliseconds)
 export const TIMER_MILESTONES = [
@@ -40,6 +41,7 @@ export const STORAGE_KEYS = {
   HAS_VISITED: 'hasVisitedTimeTracker',
   USER_TITLE: 'userTitle',
   RECENT_TICKET_IDS: 'recentTicketIds',
+  THEME: 'timeTrackerTheme',
 };
 
 // Status filter options

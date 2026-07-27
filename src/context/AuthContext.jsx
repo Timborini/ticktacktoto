@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   onAuthStateChanged,
   signInAnonymously,
@@ -19,15 +19,13 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [firebaseError, setFirebaseError] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(() => !auth);
+  const [firebaseError, setFirebaseError] = useState(() =>
+    auth ? null : 'Firebase Auth is not initialized. Check your environment variables.'
+  );
 
   useEffect(() => {
-    if (!auth) {
-      setFirebaseError('Firebase Auth is not initialized. Check your environment variables.');
-      setIsAuthReady(true);
-      return;
-    }
+    if (!auth) return;
 
     let authCompleted = false;
 
@@ -44,6 +42,7 @@ export const AuthProvider = ({ children }) => {
         authCompleted = true;
         setUser(firebaseUser);
         setUserId(firebaseUser.uid);
+        setFirebaseError(null);
         setIsAuthReady(true);
         clearTimeout(loadingTimeout);
       } else {
@@ -54,7 +53,10 @@ export const AuthProvider = ({ children }) => {
           .catch((err) => {
             authCompleted = true;
             if (import.meta.env.DEV) console.error('Anonymous sign-in error:', err);
-            setFirebaseError('Failed to sign in anonymously. Please refresh the page.');
+            // Do not hard-fail: leave the user signed out so the Google sign-in
+            // button stays reachable (App renders with user == null).
+            setUser(null);
+            setUserId(null);
             setIsAuthReady(true);
             clearTimeout(loadingTimeout);
           });

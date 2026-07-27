@@ -1,18 +1,4 @@
-import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-
-const REQUIRED_ENV_VARS = [
-  'REACT_APP_FIREBASE_API_KEY',
-  'REACT_APP_FIREBASE_AUTH_DOMAIN',
-  'REACT_APP_FIREBASE_PROJECT_ID',
-  'REACT_APP_FIREBASE_STORAGE_BUCKET',
-  'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
-  'REACT_APP_FIREBASE_APP_ID',
-];
-
-export function getMissingEnvVars() {
-  return REQUIRED_ENV_VARS.filter((key) => !import.meta.env[key] || import.meta.env[key].includes('your_'));
-}
 
 export function ConfigError({ missingVars }) {
   return (

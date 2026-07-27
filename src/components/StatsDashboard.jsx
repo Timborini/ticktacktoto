@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Clock, CheckCircle, TrendingUp } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { SESSION_STATUS } from '../constants.js';

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import { useRef } from "react";
 import { X, Check } from 'lucide-react';
 import ModalBase from "./ModalBase.jsx";
 

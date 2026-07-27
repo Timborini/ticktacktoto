@@ -30,15 +30,18 @@ export const missingFirebaseVars = REQUIRED_FIREBASE_VARS.filter(
   (key) => !import.meta.env[key] || import.meta.env[key].includes('your_')
 );
 
-export const appId = import.meta.env.REACT_APP_FIREBASE_APP_ID;
-export const appIdIsValid = appId && /^[a-zA-Z0-9_-]{1,64}$/.test(appId);
+// The Firestore data lives under /artifacts/{dataAppId}/... This is a namespacing
+// path segment, NOT the Firebase app ID. It defaults to 'default-app-id' for
+// backwards compatibility with existing data.
+export const dataAppId = import.meta.env.REACT_APP_DATA_APP_ID || 'default-app-id';
+export const dataAppIdIsValid = /^[a-zA-Z0-9_-]{1,64}$/.test(dataAppId);
 
 let app = null;
 let auth = null;
 let db = null;
 let googleProvider = null;
 
-if (isFirebaseConfigValid && appIdIsValid) {
+if (isFirebaseConfigValid && dataAppIdIsValid) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -54,7 +57,7 @@ if (isFirebaseConfigValid && appIdIsValid) {
           provider: new ReCaptchaV3Provider(import.meta.env.REACT_APP_RECAPTCHA_SITE_KEY),
           isTokenAutoRefreshEnabled: true,
         });
-      } catch (e) {
+      } catch {
         // App Check init failed — app continues without enforcement.
       }
     }

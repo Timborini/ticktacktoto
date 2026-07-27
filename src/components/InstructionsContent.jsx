@@ -1,5 +1,29 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Clock, List, Pencil, CornerUpRight, Trash2, TrendingUp, Check, Keyboard, Info } from 'lucide-react';
+
+const Section = ({ id, icon: Icon, title, isExpanded, onToggle, children }) => (
+  <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+    <button
+      onClick={() => onToggle(id)}
+      className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+      aria-expanded={isExpanded}
+    >
+      <h4 className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
+        <Icon className="w-4 h-4 mr-2" />
+        {title}
+      </h4>
+      <span className="text-xl text-gray-400 dark:text-gray-500 font-light">
+        {isExpanded ? '−' : '+'}
+      </span>
+    </button>
+
+    {isExpanded && (
+      <div className="px-4 pb-4 text-sm text-gray-700 dark:text-gray-300">
+        {children}
+      </div>
+    )}
+  </div>
+);
 
 export const InstructionsContent = () => {
   const [expandedSection, setExpandedSection] = useState('getting-started');
@@ -8,37 +32,9 @@ export const InstructionsContent = () => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const Section = ({ id, icon: Icon, title, children }) => {
-    const isExpanded = expandedSection === id;
-
-    return (
-      <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-        <button
-          onClick={() => toggleSection(id)}
-          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
-          aria-expanded={isExpanded}
-        >
-          <h4 className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center">
-            <Icon className="w-4 h-4 mr-2" />
-            {title}
-          </h4>
-          <span className="text-xl text-gray-400 dark:text-gray-500 font-light">
-            {isExpanded ? '−' : '+'}
-          </span>
-        </button>
-
-        {isExpanded && (
-          <div className="px-4 pb-4 text-sm text-gray-700 dark:text-gray-300">
-            {children}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      <Section id="getting-started" icon={Clock} title="Getting Started">
+      <Section id="getting-started" isExpanded={expandedSection === 'getting-started'} onToggle={toggleSection} icon={Clock} title="Getting Started">
         <ul className="list-disc list-inside space-y-1.5">
           <li><strong>Start Timer:</strong> Enter ticket ID + press <kbd className="kbd-key">Ctrl+Space</kbd> (works while typing!)</li>
           <li><strong>Autocomplete:</strong> Recent tickets appear as suggestions</li>
@@ -47,7 +43,7 @@ export const InstructionsContent = () => {
         </ul>
       </Section>
 
-      <Section id="managing" icon={List} title="Managing Logs">
+      <Section id="managing" isExpanded={expandedSection === 'managing'} onToggle={toggleSection} icon={List} title="Managing Logs">
         <ul className="list-disc list-inside space-y-1.5">
           <li><strong>Edit:</strong> Click <Pencil className="w-3 h-3 inline-block -mt-1 text-blue-500" /> to rename tickets across all sessions</li>
           <li><strong>Reallocate:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-purple-500" /> to move sessions to different tickets</li>
@@ -56,7 +52,7 @@ export const InstructionsContent = () => {
         </ul>
       </Section>
 
-      <Section id="stats" icon={TrendingUp} title="Statistics & Insights">
+      <Section id="stats" isExpanded={expandedSection === 'stats'} onToggle={toggleSection} icon={TrendingUp} title="Statistics & Insights">
         <ul className="list-disc list-inside space-y-1.5">
           <li>Dashboard shows total time, status breakdown, and averages</li>
           <li>Stats update in real-time as you track</li>
@@ -64,7 +60,7 @@ export const InstructionsContent = () => {
         </ul>
       </Section>
 
-      <Section id="advanced" icon={Check} title="Advanced Features">
+      <Section id="advanced" isExpanded={expandedSection === 'advanced'} onToggle={toggleSection} icon={Check} title="Advanced Features">
         <ul className="list-disc list-inside space-y-1.5">
           <li><strong>Search:</strong> Find tickets instantly by ID</li>
           <li><strong>Date Filters:</strong> Today, Last 7/30 days, or custom range</li>
@@ -74,7 +70,7 @@ export const InstructionsContent = () => {
         </ul>
       </Section>
 
-      <Section id="shortcuts" icon={Keyboard} title="Keyboard Shortcuts">
+      <Section id="shortcuts" isExpanded={expandedSection === 'shortcuts'} onToggle={toggleSection} icon={Keyboard} title="Keyboard Shortcuts">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           <div><kbd className="kbd-key">Ctrl+Space</kbd> Start/Pause (works everywhere)</div>
           <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize (works everywhere)</div>
@@ -85,7 +81,7 @@ export const InstructionsContent = () => {
         </div>
       </Section>
 
-      <Section id="tips" icon={Info} title="Pro Tips">
+      <Section id="tips" isExpanded={expandedSection === 'tips'} onToggle={toggleSection} icon={Info} title="Pro Tips">
         <ul className="list-disc list-inside space-y-1.5 text-xs">
           <li>Profile & recent tickets saved locally</li>
           <li>Limits: 200 chars (ticket), 5000 chars (notes)</li>

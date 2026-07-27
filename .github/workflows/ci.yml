@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
+
+      - name: Build (with placeholder Firebase config)
+        run: npm run build
+        env:
+          REACT_APP_FIREBASE_API_KEY: ci-placeholder
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ci-placeholder.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: ci-placeholder
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ci-placeholder.firebasestorage.app
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "0"
+          REACT_APP_FIREBASE_APP_ID: ci-placeholder
+          REACT_APP_DATA_APP_ID: default-app-id
+
+  firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Run security rules tests on the Firestore emulator
+        run: npm run test:rules

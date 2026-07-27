@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition, lazy, Suspense } from 'react';
 import {
   AlertTriangle, Loader, X, Sun, Moon, Info
 } from 'lucide-react';
 import {
-  collection, query, doc, updateDoc, deleteDoc, addDoc, where, getDocs, setDoc
+  collection, query, doc, updateDoc, deleteDoc, where, getDocs, setDoc
 } from 'firebase/firestore';
 
 // --- Services & Context ---
-import { db, isFirebaseConfigValid, missingFirebaseVars } from './services/firebase.js';
+import { db, dataAppId, dataAppIdIsValid, missingFirebaseVars } from './services/firebase.js';
+import { initErrorReporting, reportError } from './services/errorReporting.js';
 import { useAuth, AuthProvider } from './context/AuthContext.jsx';
 import { ConfigError } from './components/ConfigError.jsx';
 
@@ -15,21 +16,20 @@ import { ConfigError } from './components/ConfigError.jsx';
 import { useTimer } from './hooks/useTimer.js';
 import { useRecentTickets } from './hooks/useRecentTickets.js';
 import { useFilterUrlSync } from './hooks/useFilterUrlSync.js';
-import { useLogs } from './hooks/useLogs.js';
+import { useLogs, toLog } from './hooks/useLogs.js';
 import { useTicketStatuses } from './hooks/useTicketStatuses.js';
 
 // --- Utilities ---
 import toast, { Toaster } from 'react-hot-toast';
 import useAsyncAction from './utils/useAsyncAction.js';
-import { commitInChunks } from './utils/firestore.js';
+import { commitInChunks, fetchAllByEndTimeDesc } from './utils/firestore.js';
 import { performExport } from './features/export/exportHelpers.js';
-import { formatTime, sanitizeTicketId, sanitizeNote } from './utils/helpers.js';
+import { formatTime, sanitizeTicketId, sanitizeNote, toLocalDateString } from './utils/helpers.js';
 import {
   STATUS_FILTERS,
   SESSION_STATUS,
   STORAGE_KEYS,
   MAX_USER_TITLE_LENGTH,
-  MAX_TICKET_ID_LENGTH,
 } from './constants.js';
 
 // --- Components ---
@@ -49,6 +49,15 @@ const ExportConfirmModal = lazy(() => import('./components/ExportConfirmModal.js
 const App = () => {
   const { user, userId, isAuthReady, firebaseError: authError, clearFirebaseError, handleGoogleLogin, handleLogout } = useAuth();
 
+  // --- Error Monitoring ---
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+  useEffect(() => {
+    if (db) initErrorReporting({ db, getUserId: () => userIdRef.current });
+  }, []);
+
   // --- URL Sync ---
   const {
     statusFilter, setStatusFilter,
@@ -67,9 +76,14 @@ const App = () => {
   // --- App State ---
   const [currentTicketId, setCurrentTicketId] = useState('');
   const [currentNote, setCurrentNote] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [userTitle, setUserTitle] = useState('');
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [userTitle, setUserTitle] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.USER_TITLE);
+      if (saved && typeof saved === 'string' && saved.length <= MAX_USER_TITLE_LENGTH) return saved;
+    } catch {}
+    return '';
+  });
 
   // --- Filter & Selection State ---
   const [dateFilter, setDateFilter] = useState('');
@@ -88,14 +102,28 @@ const App = () => {
   const [reportingTicketInfo, setReportingTicketInfo] = useState(null);
   const [isReallocateModalOpen, setIsReallocateModalOpen] = useState(false);
   const [reallocatingSessionInfo, setReallocatingSessionInfo] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    try {
+      if (!localStorage.getItem(STORAGE_KEYS.HAS_VISITED)) {
+        localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true');
+        return true;
+      }
+    } catch {}
+    return false;
+  });
   const [showInstructions, setShowInstructions] = useState(false);
   const [isConfirmingSubmit, setIsConfirmingSubmit] = useState(false);
   const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
   const [ticketToDelete, setTicketToDelete] = useState(null);
 
   // --- Theme State ---
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.THEME);
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {}
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
 
   // --- Performance Refs ---
   const actionHandlerRef = useRef(null);
@@ -112,33 +140,35 @@ const App = () => {
   const getCollectionRef = useMemo(() => {
     if (db && userId) {
       if (shareId && import.meta.env.REACT_APP_ENABLE_PUBLIC_SHARES === 'true') {
-        return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'public/data', shareId, 'time_entries');
+        return collection(db, 'artifacts', dataAppId, 'public_data', shareId, 'time_entries');
       }
-      return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'users', userId, 'time_entries');
+      return collection(db, 'artifacts', dataAppId, 'users', userId, 'time_entries');
     }
     return null;
-  }, [db, userId, shareId]);
+  }, [userId, shareId]);
 
   const getTicketStatusCollectionRef = useMemo(() => {
     if (db && userId) {
       if (shareId && import.meta.env.REACT_APP_ENABLE_PUBLIC_SHARES === 'true') {
-        return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'public/data', shareId, 'ticket_statuses');
+        return collection(db, 'artifacts', dataAppId, 'public_data', shareId, 'ticket_statuses');
       }
-      return collection(db, 'artifacts', import.meta.env.REACT_APP_FIREBASE_APP_ID, 'users', userId, 'ticket_statuses');
+      return collection(db, 'artifacts', dataAppId, 'users', userId, 'ticket_statuses');
     }
     return null;
-  }, [db, userId, shareId]);
+  }, [userId, shareId]);
 
   // --- Data Hooks ---
   const {
     logs,
     isLoading: logsLoading,
+    isLoadingMore,
     hasLoadedOnce: logsLoadedOnce,
     firebaseError: logsError,
     activeLog,
-    setActiveLog,
+    hasMore,
+    loadMore,
     setFirebaseError: setLogsError,
-  } = useLogs({ db, getCollectionRef, dateRangeStart, dateRangeEnd });
+  } = useLogs({ getCollectionRef, dateRangeStart, dateRangeEnd });
 
   const {
     ticketStatuses,
@@ -147,14 +177,11 @@ const App = () => {
     setFirebaseError: setStatusesError,
   } = useTicketStatuses({ getTicketStatusCollectionRef });
 
-  const timer = useTimer({ db, getCollectionRef, currentNote, ticketStatuses });
+  const timer = useTimer({ getCollectionRef, currentNote, ticketStatuses, userId });
   const { recentTicketIds, trackTicket } = useRecentTickets();
 
-  // Combine loading/error states
-  useEffect(() => {
-    setIsLoading(logsLoading);
-    setHasLoadedOnce(logsLoadedOnce);
-  }, [logsLoading, logsLoadedOnce]);
+  // Combined loading state: data fetch or in-flight user action
+  const isLoading = logsLoading || isActionLoading;
 
   // --- Theme Effect ---
   useEffect(() => {
@@ -163,24 +190,10 @@ const App = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    try { localStorage.setItem(STORAGE_KEYS.THEME, theme); } catch {}
   }, [theme]);
 
-  // --- Welcome / localStorage Effects ---
-  useEffect(() => {
-    const hasVisited = localStorage.getItem(STORAGE_KEYS.HAS_VISITED);
-    if (!hasVisited) {
-      setShowWelcome(true);
-      try { localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true'); } catch {}
-    }
-  }, []);
-
-  useEffect(() => {
-    const savedTitle = localStorage.getItem(STORAGE_KEYS.USER_TITLE);
-    if (savedTitle && typeof savedTitle === 'string' && savedTitle.length <= MAX_USER_TITLE_LENGTH) {
-      setUserTitle(savedTitle);
-    }
-  }, []);
-
+  // --- localStorage Effects ---
   useEffect(() => {
     if (!userTitle) return;
     const timer = setTimeout(() => {
@@ -237,7 +250,7 @@ const App = () => {
     if (dateRangeStart || dateRangeEnd) {
       dateFilteredLogs = logs.filter((log) => {
         if (!log.endTime) return false;
-        const logDate = new Date(log.endTime).toISOString().split('T')[0];
+        const logDate = toLocalDateString(log.endTime);
         if (dateRangeStart && logDate < dateRangeStart) return false;
         if (dateRangeEnd && logDate > dateRangeEnd) return false;
         return true;
@@ -245,8 +258,7 @@ const App = () => {
     } else if (dateFilter) {
       dateFilteredLogs = logs.filter((log) => {
         if (!log.endTime) return false;
-        const logDate = new Date(log.endTime).toISOString().split('T')[0];
-        return logDate === dateFilter;
+        return toLocalDateString(log.endTime) === dateFilter;
       });
     }
 
@@ -326,17 +338,18 @@ const App = () => {
       const targetDocId = statusEntry?.id || ticketId;
       await setDoc(
         doc(getTicketStatusCollectionRef, targetDocId),
-        { ticketId, isClosed: true },
+        { ticketId, isClosed: true, createdBy: userId },
         { merge: true }
       );
       setTicketStatuses((prev) => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: true } }));
       toast.success('Ticket closed', { id: loadingToast, duration: 3000 });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error closing ticket:', error);
+      reportError(error, { source: 'handleCloseTicket' });
       setStatusesError(`Failed to close ticket ${ticketId}.`);
       toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError, userId]);
 
   const handleReopenTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef) return;
@@ -347,17 +360,18 @@ const App = () => {
       const targetDocId = statusEntry?.id || ticketId;
       await setDoc(
         doc(getTicketStatusCollectionRef, targetDocId),
-        { ticketId, isClosed: false },
+        { ticketId, isClosed: false, createdBy: userId },
         { merge: true }
       );
       setTicketStatuses((prev) => ({ ...prev, [ticketId]: { id: targetDocId, isClosed: false } }));
       toast.success('Ticket reopened', { id: loadingToast, duration: 3000 });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error reopening ticket:', error);
+      reportError(error, { source: 'handleReopenTicket' });
       setStatusesError(`Failed to reopen ticket ${ticketId}.`);
       toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError, userId]);
 
   const handleDeleteClick = useCallback((session) => {
     setLogToDelete(session);
@@ -379,25 +393,24 @@ const App = () => {
     if ((!logToDelete && !ticketToDelete) || !getCollectionRef) return;
 
     setIsConfirmingDelete(false);
-    setIsLoading(true);
+    setIsActionLoading(true);
 
     try {
       if (ticketToDelete) {
         const sessionsQuery = query(getCollectionRef, where('ticketId', '==', ticketToDelete));
         const sessionSnapshots = await getDocs(sessionsQuery);
-        const deletePromises = sessionSnapshots.docs.map((d) => deleteDoc(d.ref));
-        await Promise.all(deletePromises);
+        const operations = sessionSnapshots.docs.map((d) => ({ ref: d.ref, type: 'delete' }));
 
         if (getTicketStatusCollectionRef) {
           try {
             const statusQuery = query(getTicketStatusCollectionRef, where('ticketId', '==', ticketToDelete));
             const statusSnapshots = await getDocs(statusQuery);
-            const statusDeletePromises = statusSnapshots.docs.map((d) => deleteDoc(d.ref));
-            await Promise.all(statusDeletePromises);
+            statusSnapshots.docs.forEach((d) => operations.push({ ref: d.ref, type: 'delete' }));
           } catch (statusError) {
-            if (import.meta.env.DEV) console.warn('Could not delete ticket status:', statusError);
+            if (import.meta.env.DEV) console.warn('Could not query ticket status:', statusError);
           }
         }
+        await commitInChunks(db, operations);
         toast.success(`Deleted ticket ${ticketToDelete} and all its sessions`);
       } else if (logToDelete) {
         await deleteDoc(doc(getCollectionRef, logToDelete.id));
@@ -405,11 +418,12 @@ const App = () => {
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error deleting:', error);
+      reportError(error, { source: 'handleConfirmDelete' });
       setLogsError('Failed to delete.');
     } finally {
       setLogToDelete(null);
       setTicketToDelete(null);
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef, setLogsError]);
 
@@ -426,7 +440,7 @@ const App = () => {
     setIsConfirmingBulkDelete(false);
 
     try {
-      setIsLoading(true);
+      setIsActionLoading(true);
       await runAsync(async () => {
         const deletePromises = Array.from(selectedSessions).map((sessionId) =>
           deleteDoc(doc(getCollectionRef, sessionId))
@@ -436,16 +450,17 @@ const App = () => {
       }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error deleting sessions:', error);
+      reportError(error, { source: 'handleConfirmBulkDelete' });
       setLogsError('Failed to delete some sessions.');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }, [getCollectionRef, selectedSessions, runAsync, setLogsError]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const updatePromises = Array.from(selectedSessions).map((sessionId) =>
         updateDoc(doc(getCollectionRef, sessionId), {
@@ -458,10 +473,11 @@ const App = () => {
       toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating session status:', error);
+      reportError(error, { source: 'handleBulkStatusChange' });
       setLogsError('Failed to update some sessions.');
       toast.error('Failed to update some sessions');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }, [getCollectionRef, selectedSessions, setLogsError]);
 
@@ -469,17 +485,18 @@ const App = () => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
     if (!sessionId || !sanitizedTicketId || !getCollectionRef) return;
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const sessionRef = doc(getCollectionRef, sessionId);
       await updateDoc(sessionRef, { ticketId: sanitizedTicketId });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error reallocating session:', error);
+      reportError(error, { source: 'handleReallocateSession' });
       setLogsError('Failed to reallocate session.');
     } finally {
       setIsReallocateModalOpen(false);
       setReallocatingSessionInfo(null);
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }, [getCollectionRef, setLogsError]);
 
@@ -490,7 +507,7 @@ const App = () => {
       return;
     }
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const operations = [];
       const sessionsQuery = query(getCollectionRef, where('ticketId', '==', oldTicketId));
@@ -508,13 +525,14 @@ const App = () => {
       await commitInChunks(db, operations);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating ticket ID:', error);
+      reportError(error, { source: 'handleUpdateTicketId' });
       setLogsError('Failed to update ticket ID. Please check the console.');
     } finally {
       setEditingTicketId(null);
       setEditingTicketValue('');
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
-  }, [getCollectionRef, getTicketStatusCollectionRef, db, setLogsError]);
+  }, [getCollectionRef, getTicketStatusCollectionRef, setLogsError]);
 
   const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
     const sanitizedNote = sanitizeNote(newNote);
@@ -523,16 +541,17 @@ const App = () => {
       return;
     }
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       await updateDoc(doc(getCollectionRef, sessionId), { note: sanitizedNote });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating session note:', error);
+      reportError(error, { source: 'handleUpdateSessionNote' });
       setLogsError('Failed to update session note. Please check the console.');
     } finally {
       setEditingSessionNote(null);
       setEditingSessionNoteValue('');
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }, [getCollectionRef, setLogsError]);
 
@@ -551,7 +570,7 @@ const App = () => {
     const finalSessionIds = getFinalSessionIds();
     if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const operations = [];
       const now = Date.now();
@@ -565,12 +584,13 @@ const App = () => {
       setExportedSessionIds(new Set());
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error marking sessions as submitted:', error);
+      reportError(error, { source: 'handleMarkAsSubmitted' });
       setLogsError('Failed to mark sessions as submitted.');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
       setIsConfirmingSubmit(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, db, setLogsError]);
+  }, [getFinalSessionIds, getCollectionRef, setLogsError]);
 
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
     if (!pendingExport || !getCollectionRef || !db) {
@@ -579,8 +599,10 @@ const App = () => {
       return;
     }
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
+      // Export first: if the download fails, no submission state has changed
+      performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
       if (markAsSubmitted && exportedSessionIds.size > 0) {
         const operations = [];
         const now = Date.now();
@@ -590,24 +612,24 @@ const App = () => {
         });
         await commitInChunks(db, operations);
       }
-      performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error:', error);
+      reportError(error, { source: 'handleConfirmExport' });
       setLogsError('Failed to update submission status.');
       toast.error('Failed to update status');
     } finally {
       setIsConfirmingSubmit(false);
       setExportedSessionIds(new Set());
       setPendingExport(null);
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
-  }, [pendingExport, exportedSessionIds, getCollectionRef, db, setLogsError]);
+  }, [pendingExport, exportedSessionIds, getCollectionRef, setLogsError]);
 
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = getFinalSessionIds();
     if (finalSessionIds.size === 0 || !getCollectionRef) return;
 
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const operations = [];
       finalSessionIds.forEach((sessionId) => {
@@ -619,11 +641,12 @@ const App = () => {
       setSelectedSessions(new Set());
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error marking sessions as unsubmitted:', error);
+      reportError(error, { source: 'handleMarkAsUnsubmitted' });
       setLogsError('Failed to mark sessions as unsubmitted.');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, db, setLogsError]);
+  }, [getFinalSessionIds, getCollectionRef, setLogsError]);
 
   const handleCreateDraft = useCallback(() => {
     const finalTicketIds = new Set(selectedTickets);
@@ -688,11 +711,11 @@ ${combinedReport.trim()}
   const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
 
-    let logsToExport = [];
-    let reportName = 'time-report';
+    let logsToExport;
+    let reportName;
 
     switch (exportType) {
-      case 'selected':
+      case 'selected': {
         if (selectedTickets.size === 0 && selectedSessions.size === 0) {
           setExportOption('');
           return;
@@ -713,6 +736,7 @@ ${combinedReport.trim()}
         logsToExport = Array.from(finalSelectedSessions);
         reportName = 'selected-report';
         break;
+      }
 
       case 'filtered':
         logsToExport = filteredAndGroupedLogs.flatMap((group) => group.sessions);
@@ -721,10 +745,25 @@ ${combinedReport.trim()}
           : 'filtered-report';
         break;
 
-      case 'all':
-        logsToExport = logs.filter((log) => log.endTime);
+      case 'all': {
+        // Fetch the complete history so the export is not limited to the
+        // realtime listener's bounded window.
+        setIsActionLoading(true);
+        try {
+          const allDocs = await fetchAllByEndTimeDesc(getCollectionRef);
+          logsToExport = allDocs.map(toLog).filter((log) => log.endTime);
+        } catch (error) {
+          if (import.meta.env.DEV) console.error('Error fetching full history:', error);
+          reportError(error, { source: 'handleExport:all' });
+          toast.error('Failed to load full history for export');
+          setExportOption('');
+          return;
+        } finally {
+          setIsActionLoading(false);
+        }
         reportName = 'full-report';
         break;
+      }
 
       default:
         setExportOption('');
@@ -753,7 +792,7 @@ ${combinedReport.trim()}
 
     performExport(logsToExport, reportName, format);
     setExportOption('');
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter]);
+  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter, getCollectionRef]);
 
   useEffect(() => {
     handleExportRef.current = handleExport;
@@ -838,12 +877,9 @@ ${combinedReport.trim()}
       if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing) {
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
-          stopTimerRef.current(false);
+          stopTimerRef.current();
         }
-        return;
       }
-
-      if (event.key === 'Enter') return;
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -870,7 +906,7 @@ ${combinedReport.trim()}
     );
   }
 
-  if (!isAuthReady || !hasLoadedOnce) {
+  if (!isAuthReady || !logsLoadedOnce) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <Loader className="h-10 w-10 text-indigo-600 animate-spin" />
@@ -939,7 +975,6 @@ ${combinedReport.trim()}
             setExportedSessionIds(new Set());
           }}
           pendingExport={pendingExport}
-          exportedSessionIds={exportedSessionIds}
           isLoading={isLoading}
           onConfirmExport={handleConfirmExport}
         />
@@ -1089,6 +1124,20 @@ ${combinedReport.trim()}
               logs={logs}
             />
           </div>
+          {hasMore && (
+            <div className="mt-4 flex items-center justify-between flex-wrap gap-2" role="status">
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Only your most recent sessions are loaded.
+              </p>
+              <button
+                onClick={loadMore}
+                disabled={isLoadingMore}
+                className="px-4 py-2 min-h-[44px] text-sm font-semibold rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors disabled:opacity-50"
+              >
+                {isLoadingMore ? 'Loading…' : 'Load older sessions'}
+              </button>
+            </div>
+          )}
         </section>
 
         <SessionList
@@ -1143,16 +1192,21 @@ ${combinedReport.trim()}
 };
 
 // Wrap App with providers and Error Boundary for graceful error handling
-const AppWithProviders = () => (
-  <ErrorBoundary>
-    {!isFirebaseConfigValid ? (
-      <ConfigError missingVars={missingFirebaseVars} />
-    ) : (
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    )}
-  </ErrorBoundary>
-);
+const AppWithProviders = () => {
+  const configErrorVars = [...missingFirebaseVars];
+  if (!dataAppIdIsValid) configErrorVars.push('REACT_APP_DATA_APP_ID (invalid format)');
+
+  return (
+    <ErrorBoundary>
+      {configErrorVars.length > 0 ? (
+        <ConfigError missingVars={configErrorVars} />
+      ) : (
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      )}
+    </ErrorBoundary>
+  );
+};
 
 export default AppWithProviders;

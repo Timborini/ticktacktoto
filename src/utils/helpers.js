@@ -44,14 +44,40 @@ export const sanitizeNote = (note) => {
 };
 
 /**
+ * Parse a 'YYYY-MM-DD' string as local midnight (not UTC).
+ * @param {string} dateStr - Date string in YYYY-MM-DD format
+ * @returns {Date|null} Date at local midnight, or null if invalid
+ */
+export const parseLocalDate = (dateStr) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * Format a timestamp as a local 'YYYY-MM-DD' string (day boundary in the
+ * user's timezone, not UTC).
+ * @param {number} ts - Milliseconds timestamp
+ * @returns {string} Local date string
+ */
+export const toLocalDateString = (ts) => {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/**
  * Security: Escape CSV data to prevent formula injection attacks
  * @param {string} data - Raw data to be exported to CSV
  * @returns {string} Safely escaped CSV data
  */
 export const escapeCSV = (data) => {
   const str = String(data);
-  // Prevent CSV injection by prefixing dangerous characters with a single quote
-  if (str.match(/^[=+\-@\t\r]/)) {
+  // Prevent CSV injection: check for dangerous characters even after leading
+  // whitespace, which spreadsheets may strip before evaluating formulas
+  const withoutLeadingWhitespace = str.replace(/^[\s\u00A0]+/u, '');
+  if (/^[=+\-@\t\r]/.test(withoutLeadingWhitespace)) {
     return `"'${str.replace(/"/g, '""')}"`;
   }
   return `"${str.replace(/"/g, '""')}"`;
