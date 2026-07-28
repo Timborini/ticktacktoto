@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { toLocalDateString } from '../utils/helpers.js';
 
 const FilterBar = ({
     searchQuery,
@@ -11,8 +12,20 @@ const FilterBar = ({
     dateRangeStart,
     dateRangeEnd
 }) => {
+    const hasActiveFilters = Boolean(searchQuery) || statusFilter !== 'All' || Boolean(dateRangeStart) || Boolean(dateRangeEnd);
+
+    const clearAll = () => {
+        setStatusFilter('All');
+        setDateFilter('');
+        setDateRangeStart('');
+        setDateRangeEnd('');
+        setSearchQuery('');
+    };
+
+    const chipClass = 'px-3 py-1.5 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors';
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {/* Search Bar */}
             <div>
                 <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -30,6 +43,7 @@ const FilterBar = ({
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
+                            aria-label="Clear search"
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
                             <X className="w-4 h-4" />
@@ -38,48 +52,50 @@ const FilterBar = ({
                 </div>
             </div>
 
-            {/* Quick Date Filters */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Quick Filters
-                </label>
-                <div className="flex flex-wrap gap-2">
+            {/* Quick Date Filter Chips */}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Quick:</span>
+                <button
+                    onClick={() => {
+                        const today = toLocalDateString(Date.now());
+                        setDateRangeStart(today);
+                        setDateRangeEnd(today);
+                        setDateFilter('');
+                    }}
+                    className={chipClass}
+                >
+                    Today
+                </button>
+                <button
+                    onClick={() => {
+                        const now = Date.now();
+                        setDateRangeStart(toLocalDateString(now - 7 * 24 * 60 * 60 * 1000));
+                        setDateRangeEnd(toLocalDateString(now));
+                        setDateFilter('');
+                    }}
+                    className={chipClass}
+                >
+                    Last 7 Days
+                </button>
+                <button
+                    onClick={() => {
+                        const now = Date.now();
+                        setDateRangeStart(toLocalDateString(now - 30 * 24 * 60 * 60 * 1000));
+                        setDateRangeEnd(toLocalDateString(now));
+                        setDateFilter('');
+                    }}
+                    className={chipClass}
+                >
+                    Last 30 Days
+                </button>
+                {hasActiveFilters && (
                     <button
-                        onClick={() => {
-                            const today = new Date().toISOString().split('T')[0];
-                            setDateRangeStart(today);
-                            setDateRangeEnd(today);
-                            setDateFilter('');
-                        }}
-                        className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                        onClick={clearAll}
+                        className="px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 rounded-full border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
-                        Today
+                        Clear All
                     </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(weekAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 7 Days
-                    </button>
-                    <button
-                        onClick={() => {
-                            const today = new Date();
-                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                            setDateRangeStart(monthAgo.toISOString().split('T')[0]);
-                            setDateRangeEnd(today.toISOString().split('T')[0]);
-                            setDateFilter('');
-                        }}
-                        className="px-4 py-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                    >
-                        Last 30 Days
-                    </button>
-                </div>
+                )}
             </div>
 
             {/* Status Filter */}
@@ -88,7 +104,7 @@ const FilterBar = ({
                     Status Filter
                 </label>
                 <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                    <option value="All">All Unsubmitted</option>
+                    <option value="All">All</option>
                     <option value="Open">Open</option>
                     <option value="Closed">Closed</option>
                     <option value="Submitted">Submitted</option>
@@ -128,20 +144,6 @@ const FilterBar = ({
                     />
                 </div>
             </div>
-
-            {/* Clear All Filters Button */}
-            <button
-                onClick={() => {
-                    setStatusFilter('All');
-                    setDateFilter('');
-                    setDateRangeStart('');
-                    setDateRangeEnd('');
-                    setSearchQuery('');
-                }}
-                className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors active:scale-[0.98]"
-            >
-                Clear All Filters
-            </button>
         </div>
     );
 };

@@ -13,6 +13,7 @@ import {
   RANGED_LOGS_QUERY_LIMIT,
 } from '../constants.js';
 import { parseLocalDate } from '../utils/helpers.js';
+import toast from 'react-hot-toast';
 
 export function toLog(doc) {
   const data = doc.data();
@@ -176,7 +177,7 @@ export function useLogs({ getCollectionRef, dateRangeStart, dateRangeEnd }) {
     } catch (error) {
       if (import.meta.env.DEV) console.error('Firestore load-more error:', error);
       if (error.code !== 'permission-denied') {
-        setFirebaseError('Failed to load older sessions. Please try again.');
+        toast.error('Failed to load older sessions. Please try again.');
       }
     } finally {
       setIsLoadingMore(false);

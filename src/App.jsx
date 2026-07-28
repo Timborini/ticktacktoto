@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, startTransition, lazy, Suspense } from 'react';
 import {
-  AlertTriangle, Loader, X, Sun, Moon, Info
+  AlertTriangle, Loader, X, Sun, Moon, Info, User, LogOut
 } from 'lucide-react';
 import {
-  collection, query, doc, updateDoc, deleteDoc, where, getDocs, setDoc
+  collection, query, doc, getDoc, updateDoc, deleteDoc, where, getDocs, setDoc
 } from 'firebase/firestore';
 
 // --- Services & Context ---
@@ -23,6 +23,7 @@ import { useTicketStatuses } from './hooks/useTicketStatuses.js';
 import toast, { Toaster } from 'react-hot-toast';
 import useAsyncAction from './utils/useAsyncAction.js';
 import { commitInChunks, fetchAllByEndTimeDesc } from './utils/firestore.js';
+import { showUndoToast, normalizeForRestore, runLastUndo } from './utils/undoToast.jsx';
 import { performExport } from './features/export/exportHelpers.js';
 import { formatTime, sanitizeTicketId, sanitizeNote, toLocalDateString } from './utils/helpers.js';
 import {
@@ -35,6 +36,7 @@ import {
 // --- Components ---
 import { InstructionsContent } from './components/InstructionsContent.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import { isAnyModalOpen } from './components/modalState.js';
 import TimerSection from './components/TimerSection.jsx';
 import SessionList from './components/SessionList.jsx';
 import StatsDashboard from './components/StatsDashboard.jsx';
@@ -87,7 +89,6 @@ const App = () => {
 
   // --- Filter & Selection State ---
   const [dateFilter, setDateFilter] = useState('');
-  const [selectedTickets, setSelectedTickets] = useState(new Set());
   const [selectedSessions, setSelectedSessions] = useState(new Set());
   const [exportOption, setExportOption] = useState('');
   const [exportFormat, setExportFormat] = useState('');
@@ -104,17 +105,17 @@ const App = () => {
   const [reallocatingSessionInfo, setReallocatingSessionInfo] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => {
     try {
-      if (!localStorage.getItem(STORAGE_KEYS.HAS_VISITED)) {
-        localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true');
-        return true;
-      }
+      return !localStorage.getItem(STORAGE_KEYS.HAS_VISITED);
     } catch {}
     return false;
   });
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [isConfirmingSubmit, setIsConfirmingSubmit] = useState(false);
   const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
   const [ticketToDelete, setTicketToDelete] = useState(null);
+  const [ticketDeleteCount, setTicketDeleteCount] = useState(null);
 
   // --- Theme State ---
   const [theme, setTheme] = useState(() => {
@@ -219,7 +220,6 @@ const App = () => {
 
   // --- Clear selections when filters change ---
   useEffect(() => {
-    setSelectedTickets(new Set());
     setSelectedSessions(new Set());
   }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd, dateFilter]);
 
@@ -346,10 +346,9 @@ const App = () => {
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error closing ticket:', error);
       reportError(error, { source: 'handleCloseTicket' });
-      setStatusesError(`Failed to close ticket ${ticketId}.`);
       toast.error('Failed to close ticket', { id: loadingToast, duration: 4000 });
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError, userId]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, userId]);
 
   const handleReopenTicket = useCallback(async (ticketId) => {
     if (!getTicketStatusCollectionRef) return;
@@ -368,25 +367,35 @@ const App = () => {
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error reopening ticket:', error);
       reportError(error, { source: 'handleReopenTicket' });
-      setStatusesError(`Failed to reopen ticket ${ticketId}.`);
       toast.error('Failed to reopen ticket', { id: loadingToast, duration: 4000 });
     }
-  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, setStatusesError, userId]);
+  }, [getTicketStatusCollectionRef, ticketStatuses, setTicketStatuses, userId]);
 
   const handleDeleteClick = useCallback((session) => {
     setLogToDelete(session);
     setIsConfirmingDelete(true);
   }, []);
 
-  const handleDeleteTicketClick = useCallback((ticketId) => {
+  const handleDeleteTicketClick = useCallback(async (ticketId) => {
     setTicketToDelete(ticketId);
+    setTicketDeleteCount(null);
     setIsConfirmingDelete(true);
-  }, []);
+    if (!getCollectionRef) return;
+    try {
+      const sessionsQuery = query(getCollectionRef, where('ticketId', '==', ticketId));
+      const snapshot = await getDocs(sessionsQuery);
+      setTicketDeleteCount(snapshot.size);
+    } catch (error) {
+      if (import.meta.env.DEV) console.warn('Could not count ticket sessions:', error);
+      setTicketDeleteCount(logs.filter((l) => l.ticketId === ticketId).length);
+    }
+  }, [getCollectionRef, logs]);
 
   const handleCancelDelete = useCallback(() => {
     setIsConfirmingDelete(false);
     setLogToDelete(null);
     setTicketToDelete(null);
+    setTicketDeleteCount(null);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -399,33 +408,75 @@ const App = () => {
       if (ticketToDelete) {
         const sessionsQuery = query(getCollectionRef, where('ticketId', '==', ticketToDelete));
         const sessionSnapshots = await getDocs(sessionsQuery);
+        const deletedSessions = sessionSnapshots.docs.map((d) => ({ id: d.id, data: d.data() }));
         const operations = sessionSnapshots.docs.map((d) => ({ ref: d.ref, type: 'delete' }));
 
+        const deletedStatuses = [];
         if (getTicketStatusCollectionRef) {
           try {
             const statusQuery = query(getTicketStatusCollectionRef, where('ticketId', '==', ticketToDelete));
             const statusSnapshots = await getDocs(statusQuery);
-            statusSnapshots.docs.forEach((d) => operations.push({ ref: d.ref, type: 'delete' }));
+            statusSnapshots.docs.forEach((d) => {
+              operations.push({ ref: d.ref, type: 'delete' });
+              deletedStatuses.push({ id: d.id, data: d.data() });
+            });
           } catch (statusError) {
             if (import.meta.env.DEV) console.warn('Could not query ticket status:', statusError);
           }
         }
         await commitInChunks(db, operations);
-        toast.success(`Deleted ticket ${ticketToDelete} and all its sessions`);
+        setSelectedSessions((prevSelected) => {
+          const newSelected = new Set(prevSelected);
+          deletedSessions.forEach(({ id }) => newSelected.delete(id));
+          return newSelected;
+        });
+        const collectionRef = getCollectionRef;
+        const statusCollectionRef = getTicketStatusCollectionRef;
+        const deletedTicketId = ticketToDelete;
+        showUndoToast(`Deleted ticket ${deletedTicketId} and ${deletedSessions.length} session(s)`, async () => {
+          const restoreOps = deletedSessions.map(({ id, data }) => ({
+            ref: doc(collectionRef, id),
+            data: normalizeForRestore(data),
+            type: 'set',
+          }));
+          if (statusCollectionRef) {
+            deletedStatuses.forEach(({ id, data }) => {
+              restoreOps.push({ ref: doc(statusCollectionRef, id), data, type: 'set' });
+            });
+          }
+          await commitInChunks(db, restoreOps);
+        }, { undoMessage: `Ticket ${deletedTicketId} and its sessions restored` });
       } else if (logToDelete) {
-        await deleteDoc(doc(getCollectionRef, logToDelete.id));
-        toast.success('Session deleted');
+        const sessionRef = doc(getCollectionRef, logToDelete.id);
+        const snapshot = await getDoc(sessionRef);
+        const rawData = snapshot.exists() ? snapshot.data() : null;
+        await deleteDoc(sessionRef);
+        setSelectedSessions((prevSelected) => {
+          if (!prevSelected.has(logToDelete.id)) return prevSelected;
+          const newSelected = new Set(prevSelected);
+          newSelected.delete(logToDelete.id);
+          return newSelected;
+        });
+        if (rawData) {
+          const deletedTicketId = logToDelete.ticketId;
+          showUndoToast(`Deleted session for ${deletedTicketId}`, async () => {
+            await setDoc(sessionRef, normalizeForRestore(rawData));
+          });
+        } else {
+          toast.success('Session deleted');
+        }
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error deleting:', error);
       reportError(error, { source: 'handleConfirmDelete' });
-      setLogsError('Failed to delete.');
+      toast.error('Failed to delete. Please try again.');
     } finally {
       setLogToDelete(null);
       setTicketToDelete(null);
+      setTicketDeleteCount(null);
       setIsActionLoading(false);
     }
-  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef, setLogsError]);
+  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef]);
 
   // --- Bulk Operations ---
   const [runAsync] = useAsyncAction('Failed to perform action');
@@ -441,45 +492,74 @@ const App = () => {
 
     try {
       setIsActionLoading(true);
+      const sessionIds = Array.from(selectedSessions);
+      const snapshots = await Promise.all(sessionIds.map((id) => getDoc(doc(getCollectionRef, id))));
+      const deletedDocs = snapshots
+        .filter((s) => s.exists())
+        .map((s) => ({ id: s.id, data: s.data() }));
       await runAsync(async () => {
-        const deletePromises = Array.from(selectedSessions).map((sessionId) =>
-          deleteDoc(doc(getCollectionRef, sessionId))
-        );
-        await Promise.all(deletePromises);
+        await commitInChunks(db, sessionIds.map((id) => ({ ref: doc(getCollectionRef, id), type: 'delete' })));
         setSelectedSessions(new Set());
-      }, { successMessage: `Successfully deleted ${selectedSessions.size} session(s)` });
+      });
+      const collectionRef = getCollectionRef;
+      showUndoToast(`Deleted ${deletedDocs.length} session(s)`, async () => {
+        await commitInChunks(db, deletedDocs.map(({ id, data }) => ({
+          ref: doc(collectionRef, id),
+          data: normalizeForRestore(data),
+          type: 'set',
+        })));
+      });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error deleting sessions:', error);
       reportError(error, { source: 'handleConfirmBulkDelete' });
-      setLogsError('Failed to delete some sessions.');
+      toast.error('Failed to delete some sessions.');
     } finally {
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, runAsync, setLogsError]);
+  }, [getCollectionRef, selectedSessions, runAsync]);
+
+  const captureStatuses = useCallback((sessionIds) => {
+    const previous = new Map();
+    sessionIds.forEach((id) => {
+      const log = logs.find((l) => l.id === id);
+      if (log) previous.set(id, { status: log.status, submissionDate: log.submissionDate ?? null });
+    });
+    return previous;
+  }, [logs]);
 
   const handleBulkStatusChange = useCallback(async (newStatus) => {
     if (!getCollectionRef || selectedSessions.size === 0) return;
 
     setIsActionLoading(true);
     try {
-      const updatePromises = Array.from(selectedSessions).map((sessionId) =>
+      const sessionIds = Array.from(selectedSessions);
+      const previousStatuses = captureStatuses(sessionIds);
+      const updatePromises = sessionIds.map((sessionId) =>
         updateDoc(doc(getCollectionRef, sessionId), {
           status: newStatus,
-          ...(newStatus === SESSION_STATUS.SUBMITTED ? { submissionDate: Date.now() } : {}),
+          submissionDate: newStatus === SESSION_STATUS.SUBMITTED ? Date.now() : null,
         })
       );
       await Promise.all(updatePromises);
       setSelectedSessions(new Set());
-      toast.success(`Successfully updated ${selectedSessions.size} session(s) to ${newStatus}`);
+      const collectionRef = getCollectionRef;
+      const submitHint = newStatus === SESSION_STATUS.SUBMITTED
+        ? ' — hidden by default; view via the Submitted filter'
+        : '';
+      showUndoToast(`Marked ${sessionIds.length} session(s) as ${newStatus}${submitHint}`, async () => {
+        await commitInChunks(db, Array.from(previousStatuses, ([id, prev]) => ({
+          ref: doc(collectionRef, id),
+          data: { status: prev.status, submissionDate: prev.submissionDate },
+        })));
+      });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating session status:', error);
       reportError(error, { source: 'handleBulkStatusChange' });
-      setLogsError('Failed to update some sessions.');
       toast.error('Failed to update some sessions');
     } finally {
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, setLogsError]);
+  }, [getCollectionRef, selectedSessions, captureStatuses]);
 
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
@@ -488,17 +568,23 @@ const App = () => {
     setIsActionLoading(true);
     try {
       const sessionRef = doc(getCollectionRef, sessionId);
+      const previousTicketId = reallocatingSessionInfo?.currentTicketId;
       await updateDoc(sessionRef, { ticketId: sanitizedTicketId });
+      if (previousTicketId && previousTicketId !== sanitizedTicketId) {
+        showUndoToast(`Moved session to ${sanitizedTicketId}`, async () => {
+          await updateDoc(doc(getCollectionRef, sessionId), { ticketId: previousTicketId });
+        }, { undoMessage: `Session moved back to ${previousTicketId}` });
+      }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error reallocating session:', error);
       reportError(error, { source: 'handleReallocateSession' });
-      setLogsError('Failed to reallocate session.');
+      toast.error('Failed to move session. Please try again.');
     } finally {
       setIsReallocateModalOpen(false);
       setReallocatingSessionInfo(null);
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, setLogsError]);
+  }, [getCollectionRef, reallocatingSessionInfo]);
 
   const handleUpdateTicketId = useCallback(async (oldTicketId, newTicketId) => {
     const sanitizedNewTicketId = sanitizeTicketId(newTicketId);
@@ -523,16 +609,41 @@ const App = () => {
       });
 
       await commitInChunks(db, operations);
+
+      const renamedSessionRefs = sessionSnapshots.docs.map((d) => d.ref);
+      const renamedStatusRefs = statusSnapshots.docs.map((d) => d.ref);
+      const renamedFrom = oldTicketId;
+      const renamedTo = sanitizedNewTicketId;
+      const renamedCount = sessionSnapshots.size;
+      showUndoToast(`Renamed ${renamedFrom} → ${renamedTo} (${renamedCount} session${renamedCount !== 1 ? 's' : ''})`, async () => {
+        // Revert only the docs captured at rename time, and only if they
+        // still carry the new ID — a later rename or a pre-existing ticket
+        // with the same ID must not be swept into the revert.
+        const currentDocs = await Promise.all(
+          [...renamedSessionRefs, ...renamedStatusRefs].map((ref) => getDoc(ref))
+        );
+        const revertOps = [];
+        currentDocs.forEach((snap) => {
+          if (snap.exists() && snap.data().ticketId === renamedTo) {
+            revertOps.push({ ref: snap.ref, data: { ticketId: renamedFrom } });
+          }
+        });
+        if (revertOps.length === 0) {
+          return `Nothing to restore — ${renamedTo} was changed again afterwards`;
+        }
+        await commitInChunks(db, revertOps);
+        return `Restored ${revertOps.length} record(s) to ${renamedFrom}`;
+      });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating ticket ID:', error);
       reportError(error, { source: 'handleUpdateTicketId' });
-      setLogsError('Failed to update ticket ID. Please check the console.');
+      toast.error('Failed to update ticket ID. Please try again.');
     } finally {
       setEditingTicketId(null);
       setEditingTicketValue('');
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, getTicketStatusCollectionRef, setLogsError]);
+  }, [getCollectionRef, getTicketStatusCollectionRef]);
 
   const handleUpdateSessionNote = useCallback(async (sessionId, newNote) => {
     const sanitizedNote = sanitizeNote(newNote);
@@ -543,28 +654,29 @@ const App = () => {
 
     setIsActionLoading(true);
     try {
+      const previousNote = logs.find((l) => l.id === sessionId)?.note ?? null;
       await updateDoc(doc(getCollectionRef, sessionId), { note: sanitizedNote });
+      if (previousNote !== null && previousNote !== sanitizedNote) {
+        showUndoToast('Note updated', async () => {
+          await updateDoc(doc(getCollectionRef, sessionId), { note: previousNote });
+        }, { undoMessage: 'Previous note restored' });
+      }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating session note:', error);
       reportError(error, { source: 'handleUpdateSessionNote' });
-      setLogsError('Failed to update session note. Please check the console.');
+      toast.error('Failed to update session note. Please try again.');
     } finally {
       setEditingSessionNote(null);
       setEditingSessionNoteValue('');
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, setLogsError]);
+  }, [getCollectionRef, logs]);
 
   const getFinalSessionIds = useCallback(() => {
     const finalSessionIds = new Set(selectedSessions);
-    selectedTickets.forEach((ticketId) => {
-      logs.forEach((log) => {
-        if (log.ticketId === ticketId) finalSessionIds.add(log.id);
-      });
-    });
     exportedSessionIds.forEach((sessionId) => finalSessionIds.add(sessionId));
     return finalSessionIds;
-  }, [selectedSessions, selectedTickets, logs, exportedSessionIds]);
+  }, [selectedSessions, exportedSessionIds]);
 
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = getFinalSessionIds();
@@ -572,6 +684,7 @@ const App = () => {
 
     setIsActionLoading(true);
     try {
+      const previousStatuses = captureStatuses(Array.from(finalSessionIds));
       const operations = [];
       const now = Date.now();
       finalSessionIds.forEach((sessionId) => {
@@ -579,18 +692,26 @@ const App = () => {
         operations.push({ ref: docRef, data: { status: SESSION_STATUS.SUBMITTED, submissionDate: now } });
       });
       await commitInChunks(db, operations);
-      setSelectedTickets(new Set());
       setSelectedSessions(new Set());
       setExportedSessionIds(new Set());
+      const collectionRef = getCollectionRef;
+      showUndoToast(`Marked ${finalSessionIds.size} session(s) as submitted — hidden by default; view via the Submitted filter`, async () => {
+        await commitInChunks(db, Array.from(previousStatuses, ([id, prev]) => ({
+          ref: doc(collectionRef, id),
+          data: { status: prev.status, submissionDate: prev.submissionDate },
+        })));
+      });
+      return true;
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error marking sessions as submitted:', error);
       reportError(error, { source: 'handleMarkAsSubmitted' });
-      setLogsError('Failed to mark sessions as submitted.');
+      toast.error('Failed to mark sessions as submitted. Please try again.');
+      return false;
     } finally {
       setIsActionLoading(false);
       setIsConfirmingSubmit(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, setLogsError]);
+  }, [getFinalSessionIds, getCollectionRef, captureStatuses]);
 
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
     if (!pendingExport || !getCollectionRef || !db) {
@@ -603,7 +724,9 @@ const App = () => {
     try {
       // Export first: if the download fails, no submission state has changed
       performExport(pendingExport.logs, pendingExport.name, pendingExport.format);
+      toast.success(`Exported ${pendingExport.logs.length} session(s) as ${pendingExport.format.toUpperCase()}`);
       if (markAsSubmitted && exportedSessionIds.size > 0) {
+        const previousStatuses = captureStatuses(Array.from(exportedSessionIds));
         const operations = [];
         const now = Date.now();
         exportedSessionIds.forEach((sessionId) => {
@@ -611,19 +734,25 @@ const App = () => {
           operations.push({ ref: sessionRef, data: { status: SESSION_STATUS.SUBMITTED, submissionDate: now } });
         });
         await commitInChunks(db, operations);
+        const collectionRef = getCollectionRef;
+        showUndoToast(`Marked ${exportedSessionIds.size} session(s) as submitted — hidden by default; view via the Submitted filter`, async () => {
+          await commitInChunks(db, Array.from(previousStatuses, ([id, prev]) => ({
+            ref: doc(collectionRef, id),
+            data: { status: prev.status, submissionDate: prev.submissionDate },
+          })));
+        });
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error:', error);
       reportError(error, { source: 'handleConfirmExport' });
-      setLogsError('Failed to update submission status.');
-      toast.error('Failed to update status');
+      toast.error('Export or status update failed. Please try again.');
     } finally {
       setIsConfirmingSubmit(false);
       setExportedSessionIds(new Set());
       setPendingExport(null);
       setIsActionLoading(false);
     }
-  }, [pendingExport, exportedSessionIds, getCollectionRef, setLogsError]);
+  }, [pendingExport, exportedSessionIds, getCollectionRef, captureStatuses]);
 
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = getFinalSessionIds();
@@ -631,25 +760,32 @@ const App = () => {
 
     setIsActionLoading(true);
     try {
+      const previousStatuses = captureStatuses(Array.from(finalSessionIds));
       const operations = [];
       finalSessionIds.forEach((sessionId) => {
         const docRef = doc(getCollectionRef, sessionId);
         operations.push({ ref: docRef, data: { status: SESSION_STATUS.UNSUBMITTED, submissionDate: null } });
       });
       await commitInChunks(db, operations);
-      setSelectedTickets(new Set());
       setSelectedSessions(new Set());
+      const collectionRef = getCollectionRef;
+      showUndoToast(`Marked ${finalSessionIds.size} session(s) as unsubmitted`, async () => {
+        await commitInChunks(db, Array.from(previousStatuses, ([id, prev]) => ({
+          ref: doc(collectionRef, id),
+          data: { status: prev.status, submissionDate: prev.submissionDate },
+        })));
+      });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error marking sessions as unsubmitted:', error);
       reportError(error, { source: 'handleMarkAsUnsubmitted' });
-      setLogsError('Failed to mark sessions as unsubmitted.');
+      toast.error('Failed to mark sessions as unsubmitted. Please try again.');
     } finally {
       setIsActionLoading(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, setLogsError]);
+  }, [getFinalSessionIds, getCollectionRef, captureStatuses]);
 
   const handleCreateDraft = useCallback(() => {
-    const finalTicketIds = new Set(selectedTickets);
+    const finalTicketIds = new Set();
     selectedSessions.forEach((sessionId) => {
       const log = logs.find((l) => l.id === sessionId);
       if (log) finalTicketIds.add(log.ticketId);
@@ -706,7 +842,7 @@ ${combinedReport.trim()}
     setReportingTicketInfo({ ticketId: draftTitle, totalDurationMs: null });
     setGeneratedReport({ text: finalPrompt.trim() });
     setIsReportModalOpen(true);
-  }, [selectedTickets, selectedSessions, logs, filteredAndGroupedLogs, userTitle]);
+  }, [selectedSessions, logs, filteredAndGroupedLogs, userTitle]);
 
   const handleExport = useCallback(async (exportType, format = 'csv') => {
     if (!exportType) return;
@@ -716,7 +852,7 @@ ${combinedReport.trim()}
 
     switch (exportType) {
       case 'selected': {
-        if (selectedTickets.size === 0 && selectedSessions.size === 0) {
+        if (selectedSessions.size === 0) {
           setExportOption('');
           return;
         }
@@ -725,13 +861,6 @@ ${combinedReport.trim()}
         selectedSessions.forEach((sessionId) => {
           const log = logs.find((l) => l.id === sessionId);
           if (log) finalSelectedSessions.add(log);
-        });
-        selectedTickets.forEach((ticketId) => {
-          logs.forEach((log) => {
-            if (log.ticketId === ticketId && log.endTime) {
-              finalSelectedSessions.add(log);
-            }
-          });
         });
         logsToExport = Array.from(finalSelectedSessions);
         reportName = 'selected-report';
@@ -749,13 +878,15 @@ ${combinedReport.trim()}
         // Fetch the complete history so the export is not limited to the
         // realtime listener's bounded window.
         setIsActionLoading(true);
+        const loadingToast = toast.loading('Loading full history…');
         try {
           const allDocs = await fetchAllByEndTimeDesc(getCollectionRef);
           logsToExport = allDocs.map(toLog).filter((log) => log.endTime);
+          toast.dismiss(loadingToast);
         } catch (error) {
           if (import.meta.env.DEV) console.error('Error fetching full history:', error);
           reportError(error, { source: 'handleExport:all' });
-          toast.error('Failed to load full history for export');
+          toast.error('Failed to load full history for export', { id: loadingToast });
           setExportOption('');
           return;
         } finally {
@@ -790,9 +921,16 @@ ${combinedReport.trim()}
       return;
     }
 
-    performExport(logsToExport, reportName, format);
+    try {
+      performExport(logsToExport, reportName, format);
+      toast.success(`Exported ${logsToExport.length} session(s) as ${format.toUpperCase()}`);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Export failed:', error);
+      reportError(error, { source: 'handleExport' });
+      toast.error('Export failed. Please try again.');
+    }
     setExportOption('');
-  }, [logs, selectedTickets, selectedSessions, filteredAndGroupedLogs, statusFilter, getCollectionRef]);
+  }, [logs, selectedSessions, filteredAndGroupedLogs, statusFilter, getCollectionRef]);
 
   useEffect(() => {
     handleExportRef.current = handleExport;
@@ -800,34 +938,56 @@ ${combinedReport.trim()}
 
   // --- Selection Handlers ---
   const handleToggleSelectTicket = useCallback((ticketId) => {
-    setSelectedTickets((prevSelected) => {
+    const group = filteredAndGroupedLogs.find((g) => g.ticketId === ticketId);
+    const sessionIds = group ? group.sessions.map((s) => s.id) : [];
+
+    setSelectedSessions((prevSelected) => {
       const newSelected = new Set(prevSelected);
-      if (newSelected.has(ticketId)) {
-        newSelected.delete(ticketId);
+      const allSelected = sessionIds.length > 0 && sessionIds.every((id) => prevSelected.has(id));
+      sessionIds.forEach((id) => {
+        if (allSelected) newSelected.delete(id);
+        else newSelected.add(id);
+      });
+      return newSelected;
+    });
+  }, [filteredAndGroupedLogs]);
+
+  const handleToggleSelectSession = useCallback((sessionId) => {
+    setSelectedSessions((prevSelected) => {
+      const newSelected = new Set(prevSelected);
+      if (newSelected.has(sessionId)) {
+        newSelected.delete(sessionId);
       } else {
-        newSelected.add(ticketId);
+        newSelected.add(sessionId);
       }
       return newSelected;
     });
   }, []);
 
   const handleToggleSelectAll = useCallback(() => {
-    const allVisibleTicketIds = new Set(filteredAndGroupedLogs.map((g) => g.ticketId));
-    const allVisibleSelected = [...allVisibleTicketIds].every((id) => selectedTickets.has(id));
+    const allVisibleSessionIds = filteredAndGroupedLogs.flatMap((g) => g.sessions.map((s) => s.id));
+    const allSelected = allVisibleSessionIds.length > 0 &&
+      allVisibleSessionIds.every((id) => selectedSessions.has(id));
 
-    if (allVisibleSelected) {
-      setSelectedTickets((prevSelected) => {
-        const newSelected = new Set(prevSelected);
-        allVisibleTicketIds.forEach((id) => newSelected.delete(id));
-        return newSelected;
-      });
+    if (allSelected) {
+      setSelectedSessions(new Set());
     } else {
-      setSelectedTickets((prevSelected) => new Set([...prevSelected, ...allVisibleTicketIds]));
+      setSelectedSessions(new Set(allVisibleSessionIds));
     }
-    setSelectedSessions(new Set());
-  }, [filteredAndGroupedLogs, selectedTickets]);
+  }, [filteredAndGroupedLogs, selectedSessions]);
 
   // --- Action Button Logic ---
+  const handleClearAllFilters = useCallback(() => {
+    setStatusFilter(STATUS_FILTERS.ALL);
+    setDateFilter('');
+    setDateRangeStart('');
+    setDateRangeEnd('');
+    setSearchQuery('');
+  }, [setStatusFilter, setDateRangeStart, setDateRangeEnd, setSearchQuery]);
+
+  const hasActiveFilters = Boolean(searchQuery) || statusFilter !== STATUS_FILTERS.ALL ||
+    Boolean(dateRangeStart) || Boolean(dateRangeEnd) || Boolean(dateFilter);
+
   const isReady = isAuthReady && userId && db;
   const pausedTicketId = timer.isTimerPaused ? timer.activeLogData?.ticketId : '';
   const inputTicketId = currentTicketId.trim();
@@ -850,7 +1010,7 @@ ${combinedReport.trim()}
     (isInputTicketClosed && !timer.isTimerPaused && !timer.isTimerRunning) ||
     (currentTicketId.trim() === '' && !timer.isTimerRunning && !timer.isTimerPaused);
   const isStopButtonDisabled = !timer.isTimerRunning && !timer.isTimerPaused;
-  const isActionDisabled = selectedTickets.size === 0 && selectedSessions.size === 0;
+  const isActionDisabled = selectedSessions.size === 0;
 
   // --- Keyboard Handler ---
   useEffect(() => {
@@ -863,8 +1023,9 @@ ${combinedReport.trim()}
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      const hasModal = document.querySelector('.fixed.inset-0');
+      const hasModal = isAnyModalOpen();
       const isEditing = editingTicketIdRef.current || editingSessionNote;
+      const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName);
 
       if (event.key === ' ' && (event.ctrlKey || event.metaKey) && !hasModal && !isEditing) {
         event.preventDefault();
@@ -874,11 +1035,18 @@ ${combinedReport.trim()}
         return;
       }
 
-      if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing) {
+      if (event.key === ' ' && event.shiftKey && !event.ctrlKey && !event.metaKey && !hasModal && !isEditing && !isTyping) {
         event.preventDefault();
         if (!isStopButtonDisabledRef.current && stopTimerRef.current) {
           stopTimerRef.current();
         }
+        return;
+      }
+
+      // Undo the most recent destructive action (delete/stop/status change/rename)
+      // while fresh; leave native text undo alone when typing in a field
+      if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !hasModal && !isEditing && !isTyping) {
+        if (runLastUndo()) event.preventDefault();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -890,27 +1058,35 @@ ${combinedReport.trim()}
 
   if (combinedError) {
     return (
-      <div className="p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md mx-auto max-w-lg mt-8">
+      <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-lg shadow-md mx-auto max-w-lg mt-8">
         <div className="flex items-center">
           <AlertTriangle className="h-6 w-6 mr-3" />
           <h2 className="text-xl font-bold">Error</h2>
         </div>
         <p className="mt-2 text-sm">{combinedError}</p>
-        <button
-          onClick={() => { clearFirebaseError(); setLogsError(null); setStatusesError(null); window.location.reload(); }}
-          className="mt-4 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
-        >
-          Refresh Page
-        </button>
+        <div className="mt-4 flex gap-3">
+          <button
+            onClick={() => { clearFirebaseError(); setLogsError(null); setStatusesError(null); }}
+            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 font-semibold rounded-lg border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+          >
+            Refresh Page
+          </button>
+        </div>
       </div>
     );
   }
 
   if (!isAuthReady || !logsLoadedOnce) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-50">
-        <Loader className="h-10 w-10 text-indigo-600 animate-spin" />
-        <p className="ml-3 text-lg font-medium text-gray-700">Loading Tracker...</p>
+      <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
+        <Loader className="h-10 w-10 text-indigo-600 dark:text-indigo-400 animate-spin" />
+        <p className="ml-3 text-lg font-medium text-gray-700 dark:text-gray-300">Loading Tracker...</p>
       </div>
     );
   }
@@ -924,15 +1100,28 @@ ${combinedReport.trim()}
           <p><strong>Time Worked:</strong> {formatTime(logToDelete.accumulatedMs)}</p>
           {logToDelete.note && <p className="mt-1"><strong>Note:</strong> <em className="break-words">{logToDelete.note}</em></p>}
         </div>
+        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">You can undo for a few seconds afterwards.</p>
       </div>
     );
   } else if (ticketToDelete) {
-    const sessionsCount = logs.filter((l) => l.ticketId === ticketToDelete).length;
+    const hasActiveTimer = activeLog && activeLog.ticketId === ticketToDelete;
     deleteMessage = (
       <div>
-        <p className="text-red-600 dark:text-red-400 font-bold mb-2">Warning: This action cannot be undone.</p>
+        <p className="text-red-600 dark:text-red-400 font-bold mb-2">This will delete the ticket and all its sessions.</p>
         <p>Are you sure you want to delete Ticket <strong>{ticketToDelete}</strong>?</p>
-        <p className="mt-2">This will permanently delete <strong>{sessionsCount}</strong> session{sessionsCount !== 1 ? 's' : ''} associated with this ticket.</p>
+        {hasActiveTimer && (
+          <p className="mt-2 text-sm font-semibold text-amber-600 dark:text-amber-400">
+            This includes your currently active timer session.
+          </p>
+        )}
+        {ticketDeleteCount === null ? (
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Counting sessions…</p>
+        ) : (
+          <p className="mt-2">
+            This will delete <strong>{ticketDeleteCount}</strong> session{ticketDeleteCount !== 1 ? 's' : ''} associated with this ticket.
+            {' '}You can undo for a few seconds afterwards.
+          </p>
+        )}
       </div>
     );
   }
@@ -943,13 +1132,16 @@ ${combinedReport.trim()}
         position="top-right"
         toastOptions={{
           duration: 3000,
-          style: { background: '#363636', color: '#fff' },
+          className: 'bg-gray-800! text-white! dark:bg-gray-100! dark:text-gray-900!',
           success: { duration: 2000, iconTheme: { primary: '#10b981', secondary: '#fff' } },
           error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
       <Suspense fallback={null}>
-        <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
+        <WelcomeModal isOpen={showWelcome} onClose={() => {
+          setShowWelcome(false);
+          try { localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true'); } catch {}
+        }} />
         <ConfirmationModal
           isOpen={isConfirmingDelete}
           title="Confirm Deletion"
@@ -957,11 +1149,12 @@ ${combinedReport.trim()}
           onConfirm={handleConfirmDelete}
           onCancel={handleCancelDelete}
           confirmText="Delete"
+          confirmDisabled={!!ticketToDelete && ticketDeleteCount === null}
         />
         <ConfirmationModal
           isOpen={isConfirmingBulkDelete}
           title="Confirm Bulk Deletion"
-          message={`Are you sure you want to delete ${selectedSessions.size} session(s)? This action cannot be undone.`}
+          message={`Are you sure you want to delete ${selectedSessions.size} session(s)? You can undo for a few seconds afterwards.`}
           onConfirm={handleConfirmBulkDelete}
           onCancel={() => setIsConfirmingBulkDelete(false)}
           confirmText="Delete"
@@ -978,28 +1171,16 @@ ${combinedReport.trim()}
           isLoading={isLoading}
           onConfirmExport={handleConfirmExport}
         />
-        <ConfirmationModal
-          isOpen={isConfirmingSubmit && !pendingExport}
-          title="Mark as Submitted?"
-          message={exportedSessionIds.size > 0
-            ? `This will mark the ${exportedSessionIds.size} exported session(s) as 'submitted'. Submitted items are hidden by default.`
-            : `This will mark all sessions for the selected ticket(s) as 'submitted'. Submitted items are hidden by default.`
-          }
-          onConfirm={handleMarkAsSubmitted}
-          onCancel={() => { setIsConfirmingSubmit(false); setExportedSessionIds(new Set()); }}
-          confirmText="Mark as Submitted"
-        />
-
         <ReportModal
           isOpen={isReportModalOpen}
-          onClose={() => {
-            setIsReportModalOpen(false);
-            if ((selectedTickets.size > 0 || selectedSessions.size > 0) && statusFilter !== STATUS_FILTERS.SUBMITTED) {
-              setIsConfirmingSubmit(true);
-            }
-          }}
+          onClose={() => setIsReportModalOpen(false)}
           reportData={generatedReport}
           ticketId={reportingTicketInfo?.ticketId}
+          canMarkSubmitted={selectedSessions.size > 0 && statusFilter !== STATUS_FILTERS.SUBMITTED}
+          onMarkSubmitted={async () => {
+            const succeeded = await handleMarkAsSubmitted();
+            if (succeeded) setIsReportModalOpen(false);
+          }}
         />
         <ReallocateModal
           isOpen={isReallocateModalOpen}
@@ -1017,16 +1198,31 @@ ${combinedReport.trim()}
               <div className="flex items-center space-x-3">
                 {user && !user.isAnonymous ? (
                   <>
-                    <img
-                      src={user.photoURL?.startsWith('https://lh3.googleusercontent.com/') ? user.photoURL : ''}
-                      alt={user.displayName || 'User'}
-                      className="w-10 h-10 rounded-full border-2 border-indigo-500"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+                    {user.photoURL?.startsWith('https://lh3.googleusercontent.com/') && !avatarError ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'User'}
+                        className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-full border-2 border-indigo-500 bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold"
+                        aria-hidden="true"
+                      >
+                        {(user.displayName || 'U').trim().charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div>
                       <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
-                      <button onClick={handleLogout} className="text-xs text-red-500 hover:underline">Logout</button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Log out
+                      </button>
                     </div>
                   </>
                 ) : (
@@ -1042,6 +1238,7 @@ ${combinedReport.trim()}
               <div>
                 <button
                   onClick={() => setShowInstructions(!showInstructions)}
+                  aria-expanded={showInstructions}
                   className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                 >
                   <Info className="w-4 h-4" />
@@ -1067,9 +1264,38 @@ ${combinedReport.trim()}
             )}
           </div>
           <div className="flex items-center space-x-2">
+            <div className="relative">
+              <button
+                onClick={() => setShowProfileSettings(!showProfileSettings)}
+                className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                aria-label="Report profile settings"
+                aria-expanded={showProfileSettings}
+                title="Report profile settings"
+              >
+                <User className="w-5 h-5" />
+              </button>
+              {showProfileSettings && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                  <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Your Title / Role
+                  </label>
+                  <input
+                    id="user-title"
+                    type="text"
+                    value={userTitle}
+                    onChange={(e) => setUserTitle(e.target.value)}
+                    placeholder="e.g., Senior Software Engineer"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used to personalize AI status reports</p>
+                </div>
+              )}
+            </div>
             <button
               onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
               className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
             >
               {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
             </button>
@@ -1086,8 +1312,6 @@ ${combinedReport.trim()}
         <TimerSection
           isTimerRunning={timer.isTimerRunning}
           isTimerPaused={timer.isTimerPaused}
-          userTitle={userTitle}
-          setUserTitle={setUserTitle}
           currentTicketId={currentTicketId}
           setCurrentTicketId={setCurrentTicketId}
           isInputDisabled={isInputDisabled}
@@ -1124,20 +1348,6 @@ ${combinedReport.trim()}
               logs={logs}
             />
           </div>
-          {hasMore && (
-            <div className="mt-4 flex items-center justify-between flex-wrap gap-2" role="status">
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Only your most recent sessions are loaded.
-              </p>
-              <button
-                onClick={loadMore}
-                disabled={isLoadingMore}
-                className="px-4 py-2 min-h-[44px] text-sm font-semibold rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors disabled:opacity-50"
-              >
-                {isLoadingMore ? 'Loading…' : 'Load older sessions'}
-              </button>
-            </div>
-          )}
         </section>
 
         <SessionList
@@ -1145,13 +1355,10 @@ ${combinedReport.trim()}
           filteredAndGroupedLogs={filteredAndGroupedLogs}
           selectedSessions={selectedSessions}
           setSelectedSessions={setSelectedSessions}
-          selectedTickets={selectedTickets}
+          handleToggleSelectSession={handleToggleSelectSession}
           handleToggleSelectAll={handleToggleSelectAll}
           handleToggleSelectTicket={handleToggleSelectTicket}
           statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          setDateFilter={setDateFilter}
-          dateFilter={dateFilter}
           handleBulkStatusChange={handleBulkStatusChange}
           handleBulkDelete={handleBulkDelete}
           handleMarkAsUnsubmitted={handleMarkAsUnsubmitted}
@@ -1185,6 +1392,11 @@ ${combinedReport.trim()}
           handleCloseTicket={handleCloseTicket}
           handleReopenTicket={handleReopenTicket}
           handleContinueTicket={handleContinueTicket}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          loadMore={loadMore}
+          hasActiveFilters={hasActiveFilters}
+          onClearAllFilters={handleClearAllFilters}
         />
       </div>
     </div>

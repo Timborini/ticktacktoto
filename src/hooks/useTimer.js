@@ -5,7 +5,8 @@ import {
   addDoc,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { sanitizeTicketId, sanitizeNote } from '../utils/helpers.js';
+import { sanitizeTicketId, sanitizeNote, formatTime } from '../utils/helpers.js';
+import { showUndoToast } from '../utils/undoToast.jsx';
 import { MIN_SESSION_MS, TIMER_MILESTONES } from '../constants.js';
 
 export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId }) {
@@ -90,9 +91,11 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
         accumulatedMs: newAccumulatedMs,
         note: sanitizeNote(currentNote),
       });
+      return true;
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error pausing timer:', error);
-      throw error;
+      toast.error('Failed to pause timer. Please try again.');
+      return false;
     }
   }, [runningLogDocId, isTimerRunning, getCollectionRef, activeLogData, currentNote]);
 
@@ -118,9 +121,17 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
         note: sanitizeNote(currentNote),
         status: 'unsubmitted',
       });
+      const stoppedDocId = runningLogDocId;
+      const stoppedTicketId = activeLogData.ticketId;
+      const collectionRef = getCollectionRef;
+      showUndoToast(`Logged ${formatTime(finalAccumulatedMs)} to ${stoppedTicketId}`, async () => {
+        await updateDoc(doc(collectionRef, stoppedDocId), { endTime: null, startTime: null });
+      }, { icon: '✅', undoMessage: `Session for ${stoppedTicketId} restored as paused` });
+      return true;
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error stopping timer:', error);
-      throw error;
+      toast.error('Failed to stop timer. Your session is still running.');
+      return false;
     }
   }, [runningLogDocId, getCollectionRef, isTimerRunning, isTimerPaused, activeLogData, currentNote]);
 
@@ -140,9 +151,11 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
         createdBy: userId,
       };
       await addDoc(getCollectionRef, newEntry);
+      return true;
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error starting new timer:', error);
-      throw error;
+      toast.error('Failed to start timer. Please try again.');
+      return false;
     }
   }, [getCollectionRef, userId]);
 
@@ -156,12 +169,14 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
           startTime: startTimestamp,
           note: sanitizeNote(currentNote),
         });
+        return true;
       } else {
         throw new Error('No paused session to resume');
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error resuming timer:', error);
-      throw error;
+      toast.error('Failed to resume timer. Please try again.');
+      return false;
     }
   }, [getCollectionRef, isTimerPaused, runningLogDocId, currentNote]);
 
@@ -170,7 +185,8 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     if (ticketStatuses[ticketId]?.isClosed) return;
 
     if (isTimerRunning || isTimerPaused) {
-      await stopTimer();
+      const stopped = await stopTimer();
+      if (!stopped) return;
     }
 
     await startNewSession(ticketId, '');

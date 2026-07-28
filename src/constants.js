@@ -42,6 +42,7 @@ export const STORAGE_KEYS = {
   USER_TITLE: 'userTitle',
   RECENT_TICKET_IDS: 'recentTicketIds',
   THEME: 'timeTrackerTheme',
+  SHORTCUTS_OPEN: 'shortcutsPanelOpen',
 };
 
 // Status filter options

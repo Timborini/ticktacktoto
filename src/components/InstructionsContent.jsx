@@ -46,7 +46,7 @@ export const InstructionsContent = () => {
       <Section id="managing" isExpanded={expandedSection === 'managing'} onToggle={toggleSection} icon={List} title="Managing Logs">
         <ul className="list-disc list-inside space-y-1.5">
           <li><strong>Edit:</strong> Click <Pencil className="w-3 h-3 inline-block -mt-1 text-blue-500" /> to rename tickets across all sessions</li>
-          <li><strong>Reallocate:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-purple-500" /> to move sessions to different tickets</li>
+          <li><strong>Move:</strong> Click <CornerUpRight className="w-3 h-3 inline-block -mt-1 text-indigo-500" /> to move sessions to a different ticket (existing or new)</li>
           <li><strong>Delete:</strong> Click <Trash2 className="w-3 h-3 inline-block -mt-1 text-red-500" /> to remove sessions</li>
           <li><strong>Archive:</strong> Mark tickets as 'Closed' to filter them out</li>
         </ul>
@@ -65,7 +65,7 @@ export const InstructionsContent = () => {
           <li><strong>Search:</strong> Find tickets instantly by ID</li>
           <li><strong>Date Filters:</strong> Today, Last 7/30 days, or custom range</li>
           <li><strong>Bulk Operations:</strong> Select multiple → delete or change status</li>
-          <li><strong>Export:</strong> CSV of selected/filtered/all entries</li>
+          <li><strong>Export:</strong> CSV or JSON of selected/filtered/all entries</li>
           <li><strong>Share:</strong> Filters saved in URL - share specific views!</li>
         </ul>
       </Section>
@@ -73,7 +73,8 @@ export const InstructionsContent = () => {
       <Section id="shortcuts" isExpanded={expandedSection === 'shortcuts'} onToggle={toggleSection} icon={Keyboard} title="Keyboard Shortcuts">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           <div><kbd className="kbd-key">Ctrl+Space</kbd> Start/Pause (works everywhere)</div>
-          <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize (works everywhere)</div>
+          <div><kbd className="kbd-key">Shift+Space</kbd> Stop & Finalize (outside text fields)</div>
+          <div><kbd className="kbd-key">Ctrl+Z</kbd> Undo last action (delete/stop/status/rename)</div>
           <div><kbd className="kbd-key">↑/↓</kbd> Navigate dropdowns</div>
           <div><kbd className="kbd-key">Esc</kbd> Close modals</div>
           <div><kbd className="kbd-key">Enter</kbd> Submit forms</div>

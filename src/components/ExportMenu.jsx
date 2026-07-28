@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, FileSpreadsheet, FileJson } from 'lucide-react';
 
 /**
  * Accessible export menu (popover) with keyboard navigation.
@@ -46,6 +46,20 @@ const ExportMenu = ({
     }
   }, [isOpen, buttonRef]);
 
+  const moveFocus = (delta, maxIndex) => {
+    const items = Array.from(menuRef.current?.querySelectorAll('button[role="menuitem"]') || []);
+    setFocusIndex((current) => {
+      let next = current;
+      for (let i = 0; i <= maxIndex; i++) {
+        next = Math.min(Math.max(next + delta, 0), maxIndex);
+        if (!items[next] || !items[next].disabled) break;
+        if (next === 0 || next === maxIndex) break;
+      }
+      items[next]?.focus();
+      return next;
+    });
+  };
+
   const handleKey = (e) => {
     // Prevent bubbling to any global handlers
     e.stopPropagation();
@@ -63,11 +77,12 @@ const ExportMenu = ({
       e.preventDefault();
       // Bound focus index based on current view
       const maxIndex = exportFormat ? 2 : 1; // scope view: 3 options (0..2), format view: 2 options (0..1)
-      setFocusIndex((n) => (n < maxIndex ? n + 1 : maxIndex));
+      moveFocus(1, maxIndex);
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setFocusIndex((n) => (n > 0 ? n - 1 : 0));
+      const maxIndex = exportFormat ? 2 : 1;
+      moveFocus(-1, maxIndex);
     }
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -117,7 +132,7 @@ const ExportMenu = ({
             role="menuitem"
             type="button"
           >
-            <span className="text-xl">📄</span>
+            <FileSpreadsheet className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             <span className="font-medium">CSV</span>
           </button>
           <button
@@ -131,7 +146,7 @@ const ExportMenu = ({
             role="menuitem"
             type="button"
           >
-            <span className="text-xl">📋</span>
+            <FileJson className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             <span className="font-medium">JSON</span>
           </button>
         </>
@@ -157,6 +172,7 @@ const ExportMenu = ({
           <button
             onClick={() => onExportScope('selected')}
             disabled={!canExportSelected}
+            title={!canExportSelected ? 'Select sessions first' : 'Export selected sessions'}
             className={`w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed ${
               focusIndex === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
             }`}

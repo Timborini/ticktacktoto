@@ -1,12 +1,12 @@
-import { Play, Pause, Square, History, Clock, User, Keyboard, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Play, Pause, Square, History, Clock, Keyboard, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { STORAGE_KEYS, MAX_TICKET_ID_LENGTH } from '../constants.js';
 
 const TimerSection = ({
     isTimerRunning,
     isTimerPaused,
-    userTitle,
-    setUserTitle,
     currentTicketId,
     setCurrentTicketId,
     isInputDisabled,
@@ -22,6 +22,25 @@ const TimerSection = ({
     pausedTicketId
 }) => {
     const inputTicketId = currentTicketId.trim();
+    const shouldReduceMotion = useReducedMotion();
+
+    const [showShortcuts, setShowShortcuts] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEYS.SHORTCUTS_OPEN);
+            if (saved !== null) return saved === 'true';
+            return !localStorage.getItem(STORAGE_KEYS.HAS_VISITED);
+        } catch {
+            return false;
+        }
+    });
+
+    const toggleShortcuts = () => {
+        setShowShortcuts((prev) => {
+            const next = !prev;
+            try { localStorage.setItem(STORAGE_KEYS.SHORTCUTS_OPEN, String(next)); } catch {}
+            return next;
+        });
+    };
 
     const onStart = (ticketId) => {
         const idToStart = ticketId || inputTicketId;
@@ -39,17 +58,17 @@ const TimerSection = ({
     let actionStyle;
 
     if (isTimerRunning) {
-        actionButtonText = 'PAUSE';
+        actionButtonText = 'Pause';
         ActionButtonIcon = Pause;
         actionHandler = onPause;
         actionStyle = 'bg-yellow-500 hover:bg-yellow-600 text-white';
     } else if (isTimerPaused && inputTicketId === pausedTicketId) {
-        actionButtonText = 'RESUME';
+        actionButtonText = 'Resume';
         ActionButtonIcon = Play;
         actionHandler = onResume;
         actionStyle = 'bg-green-600 hover:bg-green-700 text-white';
     } else {
-        actionButtonText = isInputTicketClosed ? 'TICKET CLOSED' : 'START';
+        actionButtonText = isInputTicketClosed ? 'Closed' : 'Start';
         ActionButtonIcon = isInputTicketClosed ? Lock : Play;
         actionHandler = () => onStart(inputTicketId);
         actionStyle = isInputTicketClosed
@@ -61,7 +80,7 @@ const TimerSection = ({
     const isStopButtonDisabled = !isTimerRunning && !isTimerPaused;
 
     return (
-        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl mb-8 border-t-4 border-indigo-500">
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl mb-8">
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
                     {isTimerRunning ? 'Currently Running' : isTimerPaused ? 'Activity Paused' : 'Start New Session'}
@@ -72,23 +91,6 @@ const TimerSection = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* LEFT COLUMN - Inputs & Configuration */}
                 <div className="space-y-6">
-                    {/* Profile Title */}
-                    <div>
-                        <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            <User className="h-4 w-4 inline mr-1" />
-                            Your Title / Role
-                        </label>
-                        <input
-                            id="user-title"
-                            type="text"
-                            value={userTitle}
-                            onChange={(e) => setUserTitle(e.target.value)}
-                            placeholder="e.g., Senior Software Engineer"
-                            className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used to personalize AI status reports</p>
-                    </div>
-
                     {/* Ticket ID Input */}
                     <div>
                         <label htmlFor="ticket-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -103,7 +105,7 @@ const TimerSection = ({
                                 value={currentTicketId}
                                 onChange={(e) => setCurrentTicketId(e.target.value)}
                                 disabled={isInputDisabled}
-                                maxLength={200}
+                                maxLength={MAX_TICKET_ID_LENGTH}
                                 className={`w-full p-3 pr-16 text-lg border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${isInputDisabled ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600 focus:border-indigo-500'}`}
                             />
                         <datalist id="recent-tickets-datalist">
@@ -111,16 +113,18 @@ const TimerSection = ({
                                 <option key={id} value={id} />
                             ))}
                         </datalist>
-                            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                {currentTicketId.length}/200
-                            </span>
+                            {currentTicketId.length > 150 && (
+                                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                    {currentTicketId.length}/200
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             e.g., PROJ-123, JIRA-456, or any custom format
                         </p>
                         {isInputTicketClosed && (
                             <p className="text-red-500 text-sm mt-2 flex items-center">
-                                <Lock className="w-4 h-4 mr-1" /> This ticket is closed.
+                                <Lock className="w-4 h-4 mr-1" /> This ticket is closed — reopen it from the log list below to track more time.
                             </p>
                         )}
 
@@ -152,7 +156,7 @@ const TimerSection = ({
                                 height: (isTimerRunning || isTimerPaused) ? 'auto' : 0,
                                 opacity: (isTimerRunning || isTimerPaused) ? 1 : 0
                             }}
-                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                            transition={{ duration: shouldReduceMotion ? 0 : 0.3, ease: "easeInOut" }}
                         >
                             <div className="pt-1"> {/* Padding wrapper to avoid margin collapse issues during animation */}
                                 <div className="flex justify-between items-center mb-2">
@@ -184,11 +188,13 @@ const TimerSection = ({
                     <div className="text-center">
                         <motion.div
                             className={`py-8 px-6 rounded-xl shadow-inner border transition-colors touch-manipulation ${isTimerRunning ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : isTimerPaused ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600'}`}
-                            aria-live="polite"
-                            aria-atomic="true"
-                            animate={isTimerRunning ? { scale: [1, 1.05, 1] } : { scale: 1 }}
-                            transition={isTimerRunning ? { repeat: Infinity, duration: 2, ease: "easeInOut" } : {}}
+                            animate={isTimerRunning && !shouldReduceMotion ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                            transition={isTimerRunning && !shouldReduceMotion ? { repeat: Infinity, duration: 2, ease: "easeInOut" } : {}}
                         >
+                            {/* Announce state transitions only — not every ticking second */}
+                            <p className="sr-only" role="status">
+                                {isTimerRunning ? 'Timer running' : isTimerPaused ? 'Timer paused' : ''}
+                            </p>
                             <p className="text-3xl lg:text-4xl font-mono font-bold tracking-wider">
                                 <span className="sr-only">Timer: </span>
                                 {formatTime(elapsedMs)}
@@ -212,7 +218,7 @@ const TimerSection = ({
                             <span>{actionButtonText}</span>
                         </button>
                         <button
-                            onClick={() => onStop(false)}
+                            onClick={() => onStop()}
                             disabled={isStopButtonDisabled}
                             title="Stop Activity"
                             className={`w-full flex items-center justify-center space-x-2 py-3 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -224,20 +230,32 @@ const TimerSection = ({
 
                     {/* Keyboard Shortcuts */}
                     <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <h3 className="flex items-center font-semibold text-gray-600 dark:text-gray-300 mb-3 text-sm">
+                        <button
+                            type="button"
+                            onClick={toggleShortcuts}
+                            aria-expanded={showShortcuts}
+                            className="flex items-center font-semibold text-gray-600 dark:text-gray-300 text-sm hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
                             <Keyboard className="w-4 h-4 mr-2" />
                             Keyboard Shortcuts
-                        </h3>
-                        <div className="space-y-2 text-xs text-gray-500 dark:text-gray-400">
-                            <div className="flex justify-between">
-                                <span>Start / Pause / Resume</span>
-                                <kbd className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">Ctrl + Space</kbd>
+                            {showShortcuts ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                        </button>
+                        {showShortcuts && (
+                            <div className="mt-3 space-y-2 text-xs text-gray-500 dark:text-gray-400">
+                                <div className="flex justify-between">
+                                    <span>Start / Pause / Resume</span>
+                                    <kbd className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">Ctrl + Space</kbd>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Stop & Finalize (outside text fields)</span>
+                                    <kbd className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">Shift + Space</kbd>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Undo Last Action</span>
+                                    <kbd className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">Ctrl + Z</kbd>
+                                </div>
                             </div>
-                            <div className="flex justify-between">
-                                <span>Stop & Finalize</span>
-                                <kbd className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">Shift + Space</kbd>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>

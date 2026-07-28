@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { trackModalOpen } from './modalState.js';
 
 /**
  * Accessible modal base with focus trapping and restore-focus behavior.
@@ -24,6 +25,11 @@ const ModalBase = ({
 }) => {
   const modalRef = useRef(null);
   const previouslyFocusedRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return trackModalOpen();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

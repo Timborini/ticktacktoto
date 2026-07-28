@@ -1,11 +1,12 @@
 import { memo } from 'react';
-import { Pencil, Check, Repeat, Lock, CornerUpRight, Trash2, BookOpen, Clock, Calendar } from 'lucide-react';
+import { Pencil, Check, Repeat, Play, Lock, CornerUpRight, Trash2, BookOpen, Clock, Calendar } from 'lucide-react';
 import { format } from './formatters';
 
 const TicketRow = memo(function TicketRow({
   group,
-  isSelected,
   onToggleSelectTicket,
+  selectedSessions,
+  onToggleSelectSession,
   isFullySubmitted,
   onReopenTicket,
   onCloseTicket,
@@ -25,8 +26,13 @@ const TicketRow = memo(function TicketRow({
   handleDeleteClick,
   handleDeleteTicketClick
 }) {
+  const sessionIds = group.sessions.map((s) => s.id);
+  const selectedCount = sessionIds.filter((id) => selectedSessions?.has(id)).length;
+  const allSelected = sessionIds.length > 0 && selectedCount === sessionIds.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
   return (
-    <div className={`group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${isSelected ? 'ring-2 ring-indigo-500 border-transparent' : ''}`}>
+    <div className={`group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${selectedCount > 0 ? 'ring-2 ring-indigo-500 border-transparent' : ''}`}>
 
       {/* Card Header - Ticket Info */}
       <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 rounded-t-xl">
@@ -35,8 +41,10 @@ const TicketRow = memo(function TicketRow({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <input
             type="checkbox"
-            aria-label={`Select ticket ${group.ticketId}`}
-            checked={isSelected}
+            aria-label={`Select ticket ${group.ticketId} and all its sessions`}
+            checked={allSelected}
+            aria-checked={someSelected ? 'mixed' : allSelected}
+            ref={(el) => { if (el) el.indeterminate = someSelected; }}
             onChange={() => onToggleSelectTicket(group.ticketId)}
             className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
           />
@@ -76,7 +84,7 @@ const TicketRow = memo(function TicketRow({
                     setEditingTicketId(group.ticketId);
                     setEditingTicketValue(group.ticketId);
                   }}
-                  className="opacity-0 group-hover/edit:opacity-100 focus:opacity-100 p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
+                  className="opacity-100 sm:opacity-0 sm:group-hover/edit:opacity-100 focus:opacity-100 p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
                   title="Edit Ticket ID"
                   aria-label="Edit Ticket ID"
                 >
@@ -144,7 +152,7 @@ const TicketRow = memo(function TicketRow({
                   title="Start New Session"
                   aria-label="Start New Session"
                 >
-                  <Repeat className="w-4 h-4" />
+                  <Play className="w-4 h-4" />
                 </button>
               </>
             )}
@@ -170,6 +178,13 @@ const TicketRow = memo(function TicketRow({
 
               {/* Session Note */}
               <div className="flex-1 min-w-0 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  aria-label={`Select session from ${format.dateShort(session.endTime)}`}
+                  checked={selectedSessions?.has(session.id) || false}
+                  onChange={() => onToggleSelectSession(session.id)}
+                  className="h-4 w-4 mt-1 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+                />
                 <BookOpen className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   {editingSessionNote === session.id ? (
@@ -197,23 +212,26 @@ const TicketRow = memo(function TicketRow({
                     />
                   ) : (
                     <div className="group/note relative pr-6">
-                      <p
-                        className="text-sm text-gray-600 dark:text-gray-300 truncate cursor-text"
+                      <button
+                        type="button"
+                        className="block w-full text-left text-sm text-gray-600 dark:text-gray-300 truncate cursor-text"
                         onClick={() => {
                           setEditingSessionNote(session.id);
                           setEditingSessionNoteValue(session.note || '');
                         }}
                         title={session.note || 'No notes'}
+                        aria-label={`Edit session note: ${session.note || 'no notes yet'}`}
                       >
                         {session.note || <span className="italic text-gray-400">No notes added...</span>}
-                      </p>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
                           setEditingSessionNote(session.id);
                           setEditingSessionNoteValue(session.note || '');
                         }}
-                        className="absolute right-0 top-0 opacity-0 group-hover/note:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition-all"
+                        className="absolute right-0 top-0 opacity-0 group-hover/note:opacity-100 focus:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition-all"
+                        aria-label="Edit session note"
                       >
                         <Pencil className="w-3 h-3" />
                       </button>
@@ -223,7 +241,7 @@ const TicketRow = memo(function TicketRow({
               </div>
 
               {/* Session Meta & Actions */}
-              <div className="flex items-center justify-between sm:justify-end gap-4 pl-7 sm:pl-0">
+              <div className="flex items-center justify-between sm:justify-end gap-4 pl-14 sm:pl-0">
                 <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                     <Clock className="w-3 h-3" />
@@ -235,13 +253,13 @@ const TicketRow = memo(function TicketRow({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/session:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/session:opacity-100 sm:group-focus-within/session:opacity-100 transition-opacity">
                   <button
                     type="button"
                     onClick={() => onReallocateSession(session.id, group.ticketId)}
                     className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                    title="Reallocate Session"
-                    aria-label="Reallocate Session"
+                    title="Move Session to Another Ticket"
+                    aria-label="Move Session to Another Ticket"
                   >
                     <CornerUpRight className="h-3.5 w-3.5" />
                   </button>
