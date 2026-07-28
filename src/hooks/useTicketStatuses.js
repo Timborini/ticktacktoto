@@ -34,7 +34,7 @@ export function useTicketStatuses({ getTicketStatusCollectionRef }) {
     }, (error) => {
       if (import.meta.env.DEV) console.error('Firestore ticket status snapshot error:', error);
       if (error.code !== 'permission-denied') {
-        setFirebaseError('Failed to load ticket statuses. Check console.');
+        setFirebaseError('Failed to load ticket statuses. Please refresh the page.');
       }
     });
 

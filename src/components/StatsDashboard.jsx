@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { Clock, CheckCircle, TrendingUp, CircleDashed } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { SESSION_STATUS } from '../constants.js';
 
@@ -8,13 +8,17 @@ const StatsDashboard = ({
     filteredAndGroupedLogs,
     logs
 }) => {
+    const visibleSessions = useMemo(() =>
+        filteredAndGroupedLogs.flatMap((g) => g.sessions),
+    [filteredAndGroupedLogs]);
+
     const submittedCount = useMemo(() =>
-        logs.filter(l => l.status === SESSION_STATUS.SUBMITTED).length,
-    [logs]);
+        visibleSessions.filter(l => l.status === SESSION_STATUS.SUBMITTED).length,
+    [visibleSessions]);
 
     const unsubmittedCount = useMemo(() =>
-        logs.filter(l => l.status !== SESSION_STATUS.SUBMITTED).length,
-    [logs]);
+        visibleSessions.filter(l => l.status !== SESSION_STATUS.SUBMITTED).length,
+    [visibleSessions]);
 
     const averageSessionMs = useMemo(() => {
         if (logs.length === 0) return 0;
@@ -48,13 +52,19 @@ const StatsDashboard = ({
                 </div>
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Submitted:</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                            Submitted:
+                        </span>
                         <span className="text-lg font-bold text-green-700 dark:text-green-300">
                             {submittedCount}
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Unsubmitted:</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <CircleDashed className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                            Unsubmitted:
+                        </span>
                         <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
                             {unsubmittedCount}
                         </span>
@@ -63,16 +73,16 @@ const StatsDashboard = ({
             </div>
 
             {/* Average Session Time */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg shadow-md border border-purple-200 dark:border-purple-700">
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/60 dark:to-gray-700/40 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-600">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Average Session</p>
-                    <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Average Session</p>
+                    <TrendingUp className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
-                <p className="text-2xl font-bold font-mono text-purple-900 dark:text-purple-100">
+                <p className="text-2xl font-bold font-mono text-gray-900 dark:text-gray-100">
                     {formatTime(averageSessionMs)}
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Per session across all time
+                    Per session across loaded sessions
                 </p>
             </div>
         </div>

@@ -101,12 +101,11 @@ select:focus-visible {
   touch-action: manipulation;
 }
 
-/* Ensure minimum touch targets on mobile */
+/* Ensure minimum touch targets on mobile (checkboxes/radios keep fixed sizes;
+   their labels provide the tap area) */
 @media (max-width: 768px) {
   button,
-  a,
-  input[type="checkbox"],
-  input[type="radio"] {
+  a {
     min-height: 44px;
   }
 }

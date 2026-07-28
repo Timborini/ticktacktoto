@@ -1,7 +1,9 @@
 /**
  * Firestore batching helper: commit a large list of operations in chunks
  * to stay within Firestore's 500-operation-per-batch limit.
- * Each operation is { ref, data } for an update, or { ref, type: 'delete' }.
+ * Each operation is { ref, data } for an update, { ref, data, type: 'set' }
+ * for a full-document set (used to restore deleted docs), or
+ * { ref, type: 'delete' }.
  */
 import { writeBatch, query, getDocs, orderBy, limit, startAfter } from 'firebase/firestore';
 import { BATCH_CHUNK_SIZE } from '../constants.js';
@@ -11,6 +13,7 @@ export async function commitInChunks(db, operations) {
     const batch = writeBatch(db);
     operations.slice(i, i + BATCH_CHUNK_SIZE).forEach((op) => {
       if (op.type === 'delete') batch.delete(op.ref);
+      else if (op.type === 'set') batch.set(op.ref, op.data);
       else batch.update(op.ref, op.data);
     });
     await batch.commit();
