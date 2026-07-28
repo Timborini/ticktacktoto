@@ -6,13 +6,18 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   envPrefix: 'REACT_APP_',
+  server: {
+    port: 3000,
+    warmup: { clientFiles: ['./src/main.jsx', './src/App.jsx'] },
+  },
   build: {
     outDir: 'build',
-    sourcemap: false,
+    sourcemap: 'hidden',
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/firebase')) return 'firebase';
+          if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'firebase';
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/framer-motion') || id.includes('node_modules/react-hot-toast') || id.includes('node_modules/lucide-react')) {
             return 'vendor';
           }

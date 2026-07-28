@@ -139,6 +139,17 @@ describe('public shares', () => {
     await assertFails(setDoc(shareEntryRef(BOB, 'e2'), validEntry({ createdBy: ALICE })));
   });
 
+  test('rejects a members list over 100 entries on create and update', async () => {
+    const tooMany = [ALICE, ...Array.from({ length: 100 }, (_, i) => `uid-${i}`)];
+    await assertFails(setDoc(shareRef(ALICE, 'share-big'), { createdBy: ALICE, members: tooMany }));
+    await seedShare();
+    await assertFails(setDoc(shareRef(ALICE), { createdBy: ALICE, members: tooMany }));
+  });
+
+  test('rejects an empty members list', async () => {
+    await assertFails(setDoc(shareRef(ALICE, 'share-empty'), { createdBy: ALICE, members: [] }));
+  });
+
   test('non-members cannot read share data', async () => {
     await seedShare();
     await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -191,5 +202,11 @@ describe('default deny', () => {
   test('arbitrary paths are denied', async () => {
     await assertFails(getDoc(doc(authedDb(ALICE), 'some', 'random', 'path', 'doc')));
     await assertFails(setDoc(doc(authedDb(ALICE), 'artifacts', APP_ID, 'admin', 'config'), { x: 1 }));
+  });
+
+  test('paths under a different appId namespace are denied', async () => {
+    await assertFails(setDoc(doc(authedDb(ALICE), 'artifacts', 'other-app', 'users', ALICE, 'time_entries', 'e1'), validEntry()));
+    await assertFails(setDoc(doc(authedDb(ALICE), 'artifacts', 'other-app', 'public_shares', 'share-1'), { createdBy: ALICE, members: [ALICE] }));
+    await assertFails(getDoc(doc(authedDb(ALICE), 'artifacts', 'other-app', 'users', ALICE, 'time_entries', 'e1')));
   });
 });
