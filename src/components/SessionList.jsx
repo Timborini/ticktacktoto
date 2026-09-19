@@ -29,6 +29,7 @@ const SessionList = memo(function SessionList({
     exportFocusIndex,
     setExportFocusIndex,
     exportButtonRef,
+  highlightTicketId,
     closeExportMenu,
     isLoading,
     isActionDisabled,
@@ -82,7 +83,7 @@ const SessionList = memo(function SessionList({
                         <button
                             onClick={() => handleBulkStatusChange(SESSION_STATUS.SUBMITTED)}
                             disabled={isLoading}
-                            className="px-3 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                            className="px-3 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <Check className="h-4 w-4" />
                             Mark Submitted
@@ -90,7 +91,7 @@ const SessionList = memo(function SessionList({
                         <button
                             onClick={() => handleBulkStatusChange(SESSION_STATUS.UNSUBMITTED)}
                             disabled={isLoading}
-                            className="px-3 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                            className="px-3 py-2 bg-yellow-400 text-gray-900 text-sm font-semibold rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <RotateCcw className="h-4 w-4" />
                             Mark Unsubmitted
@@ -98,7 +99,7 @@ const SessionList = memo(function SessionList({
                         <button
                             onClick={handleBulkDelete}
                             disabled={isLoading}
-                            className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                            className="px-3 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                         >
                             <Trash2 className="h-4 w-4" />
                             Delete
@@ -135,7 +136,7 @@ const SessionList = memo(function SessionList({
                             onClick={handleMarkAsUnsubmitted}
                             disabled={isActionDisabled}
                             title={isActionDisabled ? 'Select sessions to enable' : 'Mark selected sessions as unsubmitted'}
-                            className="flex-1 md:flex-none px-4 py-2 bg-yellow-500 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-1.5"
+                            className="flex-1 md:flex-none px-4 py-2 bg-yellow-400 text-gray-900 font-semibold text-sm rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-1.5"
                         >
                             <RotateCcw className="h-4 w-4" />
                             Unsubmit Selected
@@ -163,11 +164,12 @@ const SessionList = memo(function SessionList({
                                 }
                             }}
                             className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 shadow-sm"
-                            aria-label="Export"
+                            disabled={isLoading}
+                            aria-label={isLoading ? 'Exporting…' : 'Export'}
                             aria-expanded={exportOption === 'menu'}
                             aria-haspopup="menu"
                         >
-                            <Download className="h-5 w-5" />
+                            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
                         </button>
 
                         {exportOption === 'menu' && (
@@ -244,9 +246,10 @@ const SessionList = memo(function SessionList({
             <div className="space-y-4">
                 <AnimatePresence mode='popLayout'>
                     {filteredAndGroupedLogs.map((group) => (
-                        <motion.div
-                            key={group.ticketId}
-                            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
+          <motion.div
+            key={group.ticketId}
+            className={group.ticketId === highlightTicketId ? 'undo-flash' : undefined}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}

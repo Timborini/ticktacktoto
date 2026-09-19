@@ -163,7 +163,7 @@ const ExportMenu = ({
               onChooseFormat('');
               setFocusIndex(0);
             }}
-            className="w-full px-4 py-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
+            className="w-full px-4 py-2 text-left text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1"
             type="button"
           >
             <ChevronLeft className="h-3 w-3" />

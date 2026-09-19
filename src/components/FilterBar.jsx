@@ -44,7 +44,7 @@ const FilterBar = ({
                         <button
                             onClick={() => setSearchQuery('')}
                             aria-label="Clear search"
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
                             <X className="w-4 h-4" />
                         </button>
