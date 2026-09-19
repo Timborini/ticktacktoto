@@ -3,7 +3,7 @@ import {
   AlertTriangle, Loader, X, Sun, Moon, Info, User, LogOut
 } from 'lucide-react';
 import {
-  collection, query, doc, getDoc, updateDoc, deleteDoc, where, getDocs, setDoc
+  collection, query, doc, getDoc, updateDoc, deleteDoc, where, getDocs, setDoc, FieldPath
 } from 'firebase/firestore';
 
 // --- Services & Context ---
@@ -16,13 +16,16 @@ import { ConfigError } from './components/ConfigError.jsx';
 import { useTimer } from './hooks/useTimer.js';
 import { useRecentTickets } from './hooks/useRecentTickets.js';
 import { useFilterUrlSync } from './hooks/useFilterUrlSync.js';
+import { useDebouncedValue } from './hooks/useDebouncedValue.js';
+import { useSelection } from './hooks/useSelection.js';
+import { useExportDropdown } from './hooks/useExportDropdown.js';
 import { useLogs, toLog } from './hooks/useLogs.js';
 import { useTicketStatuses } from './hooks/useTicketStatuses.js';
 
 // --- Utilities ---
 import toast, { Toaster } from 'react-hot-toast';
 import useAsyncAction from './utils/useAsyncAction.js';
-import { commitInChunks, fetchAllByEndTimeDesc } from './utils/firestore.js';
+import { commitInChunks, fetchAllByEndTimeDesc, MAX_EXPORT_DOCS } from './utils/firestore.js';
 import { showUndoToast, normalizeForRestore, runLastUndo } from './utils/undoToast.jsx';
 import { performExport } from './features/export/exportHelpers.js';
 import { formatTime, sanitizeTicketId, sanitizeNote, toLocalDateString } from './utils/helpers.js';
@@ -87,12 +90,8 @@ const App = () => {
     return '';
   });
 
-  // --- Filter & Selection State ---
+  // --- Filter State ---
   const [dateFilter, setDateFilter] = useState('');
-  const [selectedSessions, setSelectedSessions] = useState(new Set());
-  const [exportOption, setExportOption] = useState('');
-  const [exportFormat, setExportFormat] = useState('');
-  const [exportedSessionIds, setExportedSessionIds] = useState(new Set());
   const [pendingExport, setPendingExport] = useState(null);
 
   // --- Modal State ---
@@ -132,9 +131,6 @@ const App = () => {
   const isStopButtonDisabledRef = useRef(false);
   const stopTimerRef = useRef(null);
   const editingTicketIdRef = useRef(null);
-  const exportOptionRef = useRef('');
-  const exportButtonRef = useRef(null);
-  const [exportFocusIndex, setExportFocusIndex] = useState(0);
   const handleExportRef = useRef(null);
 
   // --- Firestore Collection Refs ---
@@ -158,6 +154,12 @@ const App = () => {
     return null;
   }, [userId, shareId]);
 
+  // Debounce the date range before it drives Firestore listeners: otherwise
+  // every keystroke in the date inputs tears down and rebuilds both
+  // onSnapshot queries.
+  const debouncedDateRangeStart = useDebouncedValue(dateRangeStart, 400);
+  const debouncedDateRangeEnd = useDebouncedValue(dateRangeEnd, 400);
+
   // --- Data Hooks ---
   const {
     logs,
@@ -169,7 +171,7 @@ const App = () => {
     hasMore,
     loadMore,
     setFirebaseError: setLogsError,
-  } = useLogs({ getCollectionRef, dateRangeStart, dateRangeEnd });
+  } = useLogs({ getCollectionRef, dateRangeStart: debouncedDateRangeStart, dateRangeEnd: debouncedDateRangeEnd });
 
   const {
     ticketStatuses,
@@ -186,11 +188,9 @@ const App = () => {
 
   // --- Theme Effect ---
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#111827' : '#ffffff');
     try { localStorage.setItem(STORAGE_KEYS.THEME, theme); } catch {}
   }, [theme]);
 
@@ -204,44 +204,32 @@ const App = () => {
   }, [userTitle]);
 
   // --- Sync active log from useLogs into timer ---
+  // Sync on the active session's identity fields only. The full timer object
+  // changes identity on every tick (elapsedMs), and the activeLog object
+  // changes on every snapshot; syncing on raw references re-ran
+  // restoreSession every render, which re-set state every pass.
+  const timerApiRef = useRef(timer);
+  useEffect(() => {
+    timerApiRef.current = timer;
+  });
+
+  const activeLogIdentity = activeLog
+    ? `${activeLog.id}|${activeLog.startTime}|${activeLog.ticketId}|${activeLog.note}|${activeLog.accumulatedMs}`
+    : null;
   useEffect(() => {
     if (activeLog) {
       setCurrentTicketId(activeLog.ticketId);
       setCurrentNote(activeLog.note || '');
-      timer.restoreSession(activeLog);
-    } else if (timer.runningLogDocId) {
+      timerApiRef.current.restoreSession(activeLog);
+    } else if (timerApiRef.current.runningLogDocId) {
       startTransition(() => {
-        timer.clearSession();
+        timerApiRef.current.clearSession();
         setCurrentTicketId('');
         setCurrentNote('');
       });
     }
-  }, [activeLog, timer]);
-
-  // --- Clear selections when filters change ---
-  useEffect(() => {
-    setSelectedSessions(new Set());
-  }, [statusFilter, searchQuery, dateRangeStart, dateRangeEnd, dateFilter]);
-
-  // --- Export dropdown click-outside ---
-  useEffect(() => {
-    exportOptionRef.current = exportOption;
-  }, [exportOption]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (exportOptionRef.current === 'menu' && !event.target.closest('.export-dropdown')) {
-        setExportOption('');
-        setExportFormat('');
-        setExportFocusIndex(0);
-      }
-    };
-
-    if (exportOption === 'menu') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [exportOption]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLogIdentity]);
 
   // --- Derived State: Grouped Logs and Totals ---
   const filteredAndGroupedLogs = useMemo(() => {
@@ -312,6 +300,36 @@ const App = () => {
 
     return statusFilteredGroups;
   }, [logs, ticketStatuses, statusFilter, dateFilter, dateRangeStart, dateRangeEnd, searchQuery]);
+
+  // --- Selection & Export Dropdown State ---
+  const {
+    selectedSessions,
+    setSelectedSessions,
+    exportedSessionIds,
+    setExportedSessionIds,
+    handleToggleSelectTicket,
+    handleToggleSelectSession,
+    handleToggleSelectAll,
+    getFinalSessionIds,
+  } = useSelection({
+    filteredAndGroupedLogs,
+    statusFilter,
+    searchQuery,
+    dateRangeStart,
+    dateRangeEnd,
+    dateFilter,
+  });
+
+  const {
+    exportOption,
+    setExportOption,
+    exportFormat,
+    setExportFormat,
+    exportFocusIndex,
+    setExportFocusIndex,
+    exportButtonRef,
+    closeExportMenu,
+  } = useExportDropdown();
 
   const totalFilteredTimeMs = useMemo(() => {
     return filteredAndGroupedLogs.reduce((total, group) => total + group.totalDurationMs, 0);
@@ -476,7 +494,7 @@ const App = () => {
       setTicketDeleteCount(null);
       setIsActionLoading(false);
     }
-  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef]);
+  }, [logToDelete, ticketToDelete, getCollectionRef, getTicketStatusCollectionRef, setSelectedSessions]);
 
   // --- Bulk Operations ---
   const [runAsync] = useAsyncAction('Failed to perform action');
@@ -493,7 +511,14 @@ const App = () => {
     try {
       setIsActionLoading(true);
       const sessionIds = Array.from(selectedSessions);
-      const snapshots = await Promise.all(sessionIds.map((id) => getDoc(doc(getCollectionRef, id))));
+      // Read the selected docs in 30-id chunks (whereIn limit) instead of one
+      // getDoc per session, keeping the read count to ceil(n/30).
+      const snapshots = [];
+      for (let i = 0; i < sessionIds.length; i += 30) {
+        const chunk = sessionIds.slice(i, i + 30);
+        const snap = await getDocs(query(getCollectionRef, where(FieldPath.documentId(), 'in', chunk)));
+        snap.docs.forEach((d) => snapshots.push(d));
+      }
       const deletedDocs = snapshots
         .filter((s) => s.exists())
         .map((s) => ({ id: s.id, data: s.data() }));
@@ -516,7 +541,7 @@ const App = () => {
     } finally {
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, runAsync]);
+  }, [getCollectionRef, selectedSessions, runAsync, setSelectedSessions]);
 
   const captureStatuses = useCallback((sessionIds) => {
     const previous = new Map();
@@ -559,7 +584,7 @@ const App = () => {
     } finally {
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, captureStatuses]);
+  }, [getCollectionRef, selectedSessions, captureStatuses, setSelectedSessions]);
 
   const handleReallocateSession = useCallback(async (sessionId, newTicketId) => {
     const sanitizedTicketId = sanitizeTicketId(newTicketId);
@@ -585,6 +610,11 @@ const App = () => {
       setIsActionLoading(false);
     }
   }, [getCollectionRef, reallocatingSessionInfo]);
+
+  const handleOpenReallocate = useCallback((sessionId, ticketId) => {
+    setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });
+    setIsReallocateModalOpen(true);
+  }, []);
 
   const handleUpdateTicketId = useCallback(async (oldTicketId, newTicketId) => {
     const sanitizedNewTicketId = sanitizeTicketId(newTicketId);
@@ -672,12 +702,6 @@ const App = () => {
     }
   }, [getCollectionRef, logs]);
 
-  const getFinalSessionIds = useCallback(() => {
-    const finalSessionIds = new Set(selectedSessions);
-    exportedSessionIds.forEach((sessionId) => finalSessionIds.add(sessionId));
-    return finalSessionIds;
-  }, [selectedSessions, exportedSessionIds]);
-
   const handleMarkAsSubmitted = useCallback(async () => {
     const finalSessionIds = getFinalSessionIds();
     if (finalSessionIds.size === 0 || !getCollectionRef || !db) return;
@@ -711,7 +735,7 @@ const App = () => {
       setIsActionLoading(false);
       setIsConfirmingSubmit(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, captureStatuses]);
+  }, [getFinalSessionIds, getCollectionRef, captureStatuses, setSelectedSessions, setExportedSessionIds]);
 
   const handleConfirmExport = useCallback(async (markAsSubmitted) => {
     if (!pendingExport || !getCollectionRef || !db) {
@@ -752,7 +776,7 @@ const App = () => {
       setPendingExport(null);
       setIsActionLoading(false);
     }
-  }, [pendingExport, exportedSessionIds, getCollectionRef, captureStatuses]);
+  }, [pendingExport, exportedSessionIds, getCollectionRef, captureStatuses, setExportedSessionIds]);
 
   const handleMarkAsUnsubmitted = useCallback(async () => {
     const finalSessionIds = getFinalSessionIds();
@@ -782,7 +806,7 @@ const App = () => {
     } finally {
       setIsActionLoading(false);
     }
-  }, [getFinalSessionIds, getCollectionRef, captureStatuses]);
+  }, [getFinalSessionIds, getCollectionRef, captureStatuses, setSelectedSessions]);
 
   const handleCreateDraft = useCallback(() => {
     const finalTicketIds = new Set();
@@ -883,6 +907,9 @@ ${combinedReport.trim()}
           const allDocs = await fetchAllByEndTimeDesc(getCollectionRef);
           logsToExport = allDocs.map(toLog).filter((log) => log.endTime);
           toast.dismiss(loadingToast);
+          if (allDocs.length >= MAX_EXPORT_DOCS) {
+            toast(`Export limited to the most recent ${MAX_EXPORT_DOCS} sessions`, { duration: 5000 });
+          }
         } catch (error) {
           if (import.meta.env.DEV) console.error('Error fetching full history:', error);
           reportError(error, { source: 'handleExport:all' });
@@ -930,51 +957,11 @@ ${combinedReport.trim()}
       toast.error('Export failed. Please try again.');
     }
     setExportOption('');
-  }, [logs, selectedSessions, filteredAndGroupedLogs, statusFilter, getCollectionRef]);
+  }, [logs, selectedSessions, filteredAndGroupedLogs, statusFilter, getCollectionRef, setExportOption, setExportedSessionIds]);
 
   useEffect(() => {
     handleExportRef.current = handleExport;
   }, [handleExport]);
-
-  // --- Selection Handlers ---
-  const handleToggleSelectTicket = useCallback((ticketId) => {
-    const group = filteredAndGroupedLogs.find((g) => g.ticketId === ticketId);
-    const sessionIds = group ? group.sessions.map((s) => s.id) : [];
-
-    setSelectedSessions((prevSelected) => {
-      const newSelected = new Set(prevSelected);
-      const allSelected = sessionIds.length > 0 && sessionIds.every((id) => prevSelected.has(id));
-      sessionIds.forEach((id) => {
-        if (allSelected) newSelected.delete(id);
-        else newSelected.add(id);
-      });
-      return newSelected;
-    });
-  }, [filteredAndGroupedLogs]);
-
-  const handleToggleSelectSession = useCallback((sessionId) => {
-    setSelectedSessions((prevSelected) => {
-      const newSelected = new Set(prevSelected);
-      if (newSelected.has(sessionId)) {
-        newSelected.delete(sessionId);
-      } else {
-        newSelected.add(sessionId);
-      }
-      return newSelected;
-    });
-  }, []);
-
-  const handleToggleSelectAll = useCallback(() => {
-    const allVisibleSessionIds = filteredAndGroupedLogs.flatMap((g) => g.sessions.map((s) => s.id));
-    const allSelected = allVisibleSessionIds.length > 0 &&
-      allVisibleSessionIds.every((id) => selectedSessions.has(id));
-
-    if (allSelected) {
-      setSelectedSessions(new Set());
-    } else {
-      setSelectedSessions(new Set(allVisibleSessionIds));
-    }
-  }, [filteredAndGroupedLogs, selectedSessions]);
 
   // --- Action Button Logic ---
   const handleClearAllFilters = useCallback(() => {
@@ -1203,6 +1190,9 @@ ${combinedReport.trim()}
                         src={user.photoURL}
                         alt={user.displayName || 'User'}
                         className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                        width={40}
+                        height={40}
+                        loading="lazy"
                         referrerPolicy="no-referrer"
                         onError={() => setAvatarError(true)}
                       />
@@ -1230,7 +1220,7 @@ ${combinedReport.trim()}
                     onClick={handleGoogleLogin}
                     className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
                   >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" referrerPolicy="no-referrer" alt="Google logo" className="w-5 h-5" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" referrerPolicy="no-referrer" alt="Google logo" className="w-5 h-5" width={20} height={20} loading="lazy" />
                     <span>Sign in with Google</span>
                   </button>
                 )}
@@ -1370,8 +1360,9 @@ ${combinedReport.trim()}
           setExportFormat={setExportFormat}
           exportFocusIndex={exportFocusIndex}
           setExportFocusIndex={setExportFocusIndex}
-          exportButtonRef={exportButtonRef}
-          isLoading={isLoading}
+            exportButtonRef={exportButtonRef}
+            closeExportMenu={closeExportMenu}
+            isLoading={isLoading}
           isActionDisabled={isActionDisabled}
           editingTicketId={editingTicketId}
           editingTicketValue={editingTicketValue}
@@ -1385,10 +1376,7 @@ ${combinedReport.trim()}
           handleUpdateSessionNote={handleUpdateSessionNote}
           handleDeleteClick={handleDeleteClick}
           handleDeleteTicketClick={handleDeleteTicketClick}
-          handleReallocateSession={(sessionId, ticketId) => {
-            setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });
-            setIsReallocateModalOpen(true);
-          }}
+            handleReallocateSession={handleOpenReallocate}
           handleCloseTicket={handleCloseTicket}
           handleReopenTicket={handleReopenTicket}
           handleContinueTicket={handleContinueTicket}

@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { Clock, CheckCircle, TrendingUp, CircleDashed } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { SESSION_STATUS } from '../constants.js';
 
-const StatsDashboard = ({
+const StatsDashboard = memo(function StatsDashboard({
     totalFilteredTimeMs,
     filteredAndGroupedLogs,
     logs
-}) => {
+}) {
     const visibleSessions = useMemo(() =>
         filteredAndGroupedLogs.flatMap((g) => g.sessions),
     [filteredAndGroupedLogs]);
@@ -87,6 +87,6 @@ const StatsDashboard = ({
             </div>
         </div>
     );
-};
+});
 
 export default StatsDashboard;

@@ -20,21 +20,28 @@ export async function commitInChunks(db, operations) {
   }
 }
 
+// Hard cap for full-history reads (e.g. "export all") so a large history
+// cannot be loaded into memory unboundedly.
+export const MAX_EXPORT_DOCS = 5000;
+
 /**
  * Fetch every document in a collection ordered by endTime descending,
  * paging through the collection. Used by "export all" so exports are
  * complete even when the realtime listener only holds a bounded window.
+ * Stops after maxDocs documents.
  */
-export async function fetchAllByEndTimeDesc(collectionRef, pageSize = BATCH_CHUNK_SIZE) {
+export async function fetchAllByEndTimeDesc(collectionRef, pageSize = BATCH_CHUNK_SIZE, maxDocs = MAX_EXPORT_DOCS) {
   const docs = [];
   let lastVisible = null;
   for (;;) {
     const constraints = [orderBy('endTime', 'desc'), limit(pageSize)];
     if (lastVisible) constraints.push(startAfter(lastVisible));
     const snapshot = await getDocs(query(collectionRef, ...constraints));
-    snapshot.docs.forEach((d) => docs.push(d));
-    if (snapshot.docs.length < pageSize) break;
+    for (const d of snapshot.docs) {
+      if (docs.length >= maxDocs) return docs;
+      docs.push(d);
+    }
+    if (snapshot.docs.length < pageSize) return docs;
     lastVisible = snapshot.docs[snapshot.docs.length - 1];
   }
-  return docs;
 }

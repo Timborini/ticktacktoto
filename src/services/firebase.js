@@ -57,9 +57,13 @@ if (isFirebaseConfigValid && dataAppIdIsValid) {
           provider: new ReCaptchaV3Provider(import.meta.env.REACT_APP_RECAPTCHA_SITE_KEY),
           isTokenAutoRefreshEnabled: true,
         });
-      } catch {
-        // App Check init failed — app continues without enforcement.
+      } catch (e) {
+        // App Check init failed — app continues, but Firestore loses bot
+        // protection, so make it visible in production, not just dev.
+        console.warn('Firebase App Check init failed — Firestore is exposed without bot protection.', e);
       }
+    } else if (!import.meta.env.DEV) {
+      console.warn('REACT_APP_RECAPTCHA_SITE_KEY not set — Firebase App Check is disabled. Set it to protect Firestore from abuse.');
     }
   } catch (e) {
     if (import.meta.env.DEV) console.error('Firebase initialization failed:', e);

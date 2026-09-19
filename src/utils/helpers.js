@@ -68,6 +68,19 @@ export const toLocalDateString = (ts) => {
 };
 
 /**
+ * Format a timestamp as a short local date label, e.g. 'Jul 27'.
+ * @param {number} ts - Milliseconds timestamp
+ * @returns {string} Short date string, or '' when invalid
+ */
+export const formatDateShort = (ts) => {
+  try {
+    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+};
+
+/**
  * Security: Escape CSV data to prevent formula injection attacks
  * @param {string} data - Raw data to be exported to CSV
  * @returns {string} Safely escaped CSV data
