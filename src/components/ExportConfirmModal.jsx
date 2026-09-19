@@ -1,4 +1,4 @@
-import { Check, Download, X } from 'lucide-react';
+import { Check, Download, X, Loader2 } from 'lucide-react';
 import ModalBase from "./ModalBase.jsx";
 
 const ExportConfirmModal = ({ isOpen, onClose, pendingExport, isLoading, onConfirmExport }) => {
@@ -31,7 +31,7 @@ const ExportConfirmModal = ({ isOpen, onClose, pendingExport, isLoading, onConfi
           disabled={isLoading}
           className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Check className="h-4 w-4 mr-2" />
+                  {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
           Export & Mark Submitted
         </button>
 
@@ -40,7 +40,7 @@ const ExportConfirmModal = ({ isOpen, onClose, pendingExport, isLoading, onConfi
           disabled={isLoading}
           className="w-full flex items-center justify-center px-4 py-2 min-h-[44px] bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download className="h-4 w-4 mr-2" />
+                  {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
           Export Only
         </button>
 

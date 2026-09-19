@@ -161,7 +161,7 @@ export function useTicketActions({
             });
           }
           await commitInChunks(db, restoreOps);
-        }, { undoMessage: `Ticket ${deletedTicketId} and its sessions restored` });
+        }, { undoMessage: `Ticket ${deletedTicketId} and its sessions restored`, ticketId: deletedTicketId });
       } else if (logToDelete) {
         const sessionRef = doc(getCollectionRef, logToDelete.id);
         const snapshot = await getDoc(sessionRef);
@@ -177,7 +177,7 @@ export function useTicketActions({
           const deletedTicketId = logToDelete.ticketId;
           showUndoToast(`Deleted session for ${deletedTicketId}`, async () => {
             await setDoc(sessionRef, normalizeForRestore(rawData));
-          });
+          }, { ticketId: deletedTicketId });
         } else {
           toast.success('Session deleted');
         }
@@ -298,7 +298,7 @@ export function useTicketActions({
       if (previousTicketId && previousTicketId !== sanitizedTicketId) {
         showUndoToast(`Moved session to ${sanitizedTicketId}`, async () => {
           await updateDoc(doc(getCollectionRef, sessionId), { ticketId: previousTicketId });
-        }, { undoMessage: `Session moved back to ${previousTicketId}` });
+        }, { undoMessage: `Session moved back to ${previousTicketId}`, ticketId: previousTicketId });
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error reallocating session:', error);
@@ -357,7 +357,7 @@ export function useTicketActions({
         }
         await commitInChunks(db, revertOps);
         return `Restored ${revertOps.length} record(s) to ${renamedFrom}`;
-      });
+      }, { ticketId: renamedFrom });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error updating ticket ID:', error);
       toast.error('Failed to update ticket ID. Please try again.');

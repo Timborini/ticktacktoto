@@ -99,7 +99,7 @@ const ReportModal = ({ isOpen, onClose, reportData, ticketId, canMarkSubmitted =
           ref={copyButtonRef}
           onClick={copyToClipboard}
           disabled={!reportData?.text}
-          className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center space-x-2 px-4 py-2 min-h-[44px] bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Copy to Clipboard"
         >
           <Clipboard className="w-4 h-4" />

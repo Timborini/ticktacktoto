@@ -84,7 +84,7 @@ const TicketRow = memo(function TicketRow({
                     setEditingTicketId(group.ticketId);
                     setEditingTicketValue(group.ticketId);
                   }}
-                  className="opacity-100 sm:opacity-0 sm:group-hover/edit:opacity-100 focus:opacity-100 p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
+                  className="opacity-100 sm:opacity-0 sm:group-hover/edit:opacity-100 focus:opacity-100 p-1 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
                   title="Edit Ticket ID"
                   aria-label="Edit Ticket ID"
                 >
@@ -160,7 +160,7 @@ const TicketRow = memo(function TicketRow({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); handleDeleteTicketClick(group.ticketId); }}
-              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
               title="Delete Ticket & All Sessions"
               aria-label="Delete Ticket"
             >
@@ -222,7 +222,7 @@ const TicketRow = memo(function TicketRow({
                         title={session.note || 'No notes'}
                         aria-label={`Edit session note: ${session.note || 'no notes yet'}`}
                       >
-                        {session.note || <span className="italic text-gray-400">No notes added...</span>}
+                        {session.note || <span className="italic text-gray-500 dark:text-gray-400">No notes added...</span>}
                       </button>
                       <button
                         type="button"
@@ -230,7 +230,7 @@ const TicketRow = memo(function TicketRow({
                           setEditingSessionNote(session.id);
                           setEditingSessionNoteValue(session.note || '');
                         }}
-                        className="absolute right-0 top-0 opacity-0 group-hover/note:opacity-100 focus:opacity-100 p-0.5 text-gray-400 hover:text-indigo-600 transition-all"
+                        className="absolute right-0 top-0 opacity-0 group-hover/note:opacity-100 focus:opacity-100 p-0.5 text-gray-500 dark:text-gray-400 hover:text-indigo-600 transition-all"
                         aria-label="Edit session note"
                       >
                         <Pencil className="w-3 h-3" />
@@ -257,7 +257,7 @@ const TicketRow = memo(function TicketRow({
                   <button
                     type="button"
                     onClick={() => onReallocateSession(session.id, group.ticketId)}
-                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                    className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
                     title="Move Session to Another Ticket"
                     aria-label="Move Session to Another Ticket"
                   >
@@ -266,7 +266,7 @@ const TicketRow = memo(function TicketRow({
                   <button
                     type="button"
                     onClick={() => handleDeleteClick(session)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                     title="Delete Session"
                     aria-label="Delete Session"
                   >
@@ -278,7 +278,7 @@ const TicketRow = memo(function TicketRow({
             </div>
           ))
         ) : (
-          <div className="p-4 text-center text-sm text-gray-400 italic">
+          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 italic">
             No sessions recorded for this ticket.
           </div>
         )}

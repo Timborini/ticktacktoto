@@ -65,12 +65,12 @@ const TimerSection = ({
         actionButtonText = 'Pause';
         ActionButtonIcon = Pause;
         actionHandler = onPause;
-        actionStyle = 'bg-yellow-500 hover:bg-yellow-600 text-white';
+        actionStyle = 'bg-yellow-400 hover:bg-yellow-500 text-gray-900';
     } else if (isTimerPaused && inputTicketId === pausedTicketId) {
         actionButtonText = 'Resume';
         ActionButtonIcon = Play;
         actionHandler = onResume;
-        actionStyle = 'bg-green-600 hover:bg-green-700 text-white';
+        actionStyle = 'bg-green-700 hover:bg-green-800 text-white';
     } else {
         actionButtonText = isInputTicketClosed ? 'Closed' : 'Start';
         ActionButtonIcon = isInputTicketClosed ? Lock : Play;
@@ -118,16 +118,14 @@ const TimerSection = ({
                             ))}
                         </datalist>
                             {currentTicketId.length > 150 && (
-                                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${currentTicketId.length > 180 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                    {currentTicketId.length}/200
+                                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm ${currentTicketId.length > 180 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    {currentTicketId.length}/200 · near limit
                                 </span>
                             )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            e.g., PROJ-123, JIRA-456, or any custom format
-                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">e.g., PROJ-123, JIRA-456, or any custom format</p>
                         {isInputTicketClosed && (
-                            <p className="text-red-500 text-sm mt-2 flex items-center">
+                            <p className="text-red-700 dark:text-red-400 text-sm mt-2 flex items-center">
                                 <Lock className="w-4 h-4 mr-1" /> This ticket is closed — reopen it from the log list below to track more time.
                             </p>
                         )}
@@ -167,8 +165,8 @@ const TimerSection = ({
                                     <label htmlFor="session-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                         Session Notes
                                     </label>
-                                    <span className={`text-xs ${currentNote.length > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                        {currentNote.length}/5000
+                                    <span className={`text-sm ${currentNote.length > 4500 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                                        {currentNote.length}/5000 · near limit
                                     </span>
                                 </div>
                                 <textarea
@@ -180,7 +178,7 @@ const TimerSection = ({
                                     rows="3"
                                     className="w-full p-3 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm resize-none"
                                 />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-1">Saved automatically on pause/stop</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-1">Saved automatically on pause/stop</p>
                             </div>
                         </motion.div>
                     </div>
@@ -204,7 +202,7 @@ const TimerSection = ({
                                 {formatTime(elapsedMs)}
                             </p>
                             {(isTimerRunning || isTimerPaused) && (
-                                <p className={`text-sm mt-2 font-semibold ${isTimerRunning ? 'text-indigo-500' : 'text-yellow-500'}`}>
+                                <p className={`text-sm mt-2 font-semibold ${isTimerRunning ? 'text-indigo-700 dark:text-indigo-300' : 'text-yellow-700 dark:text-yellow-300'}`}>
                                     {isTimerRunning ? 'Running' : 'Paused'}
                                 </p>
                             )}
@@ -225,7 +223,7 @@ const TimerSection = ({
                             onClick={() => onStop()}
                             disabled={isStopButtonDisabled}
                             title="Stop Activity"
-                            className={`w-full flex items-center justify-center space-x-2 py-3 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-500 hover:bg-red-600 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full flex items-center justify-center space-x-2 py-3 px-6 rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] bg-red-600 hover:bg-red-700 text-white ${isStopButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <Square className="h-5 w-5" />
                             <span>Stop</span>

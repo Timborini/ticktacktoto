@@ -28,6 +28,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import useAsyncAction from './utils/useAsyncAction.js';
 import { commitInChunks, fetchAllByEndTimeDesc, MAX_EXPORT_DOCS } from './utils/firestore.js';
 import { showUndoToast, runLastUndo } from './utils/undoToast.jsx';
+import { usePopoverDismiss } from './hooks/usePopoverDismiss.js';
 import { performExport } from './features/export/exportHelpers.js';
 import { formatTime, toLocalDateString } from './utils/helpers.js';
 import {
@@ -103,6 +104,15 @@ const App = () => {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [highlightTicketId, setHighlightTicketId] = useState(null);
+
+  const instructionsPanelRef = useRef(null);
+  const instructionsTriggerRef = useRef(null);
+  const profilePanelRef = useRef(null);
+  const profileTriggerRef = useRef(null);
+
+  usePopoverDismiss({ isOpen: showInstructions, onClose: () => setShowInstructions(false), panelRef: instructionsPanelRef, triggerRef: instructionsTriggerRef });
+  usePopoverDismiss({ isOpen: showProfileSettings, onClose: () => setShowProfileSettings(false), panelRef: profilePanelRef, triggerRef: profileTriggerRef });
 
   // --- Theme State ---
   const [theme, setTheme] = useState(() => {
@@ -612,6 +622,32 @@ ${combinedReport.trim()}
   const isStopButtonDisabled = !timer.isTimerRunning && !timer.isTimerPaused;
   const isActionDisabled = selectedSessions.size === 0;
 
+  // Flash-highlight the session restored by the last undo (HIG: show undo results).
+  useEffect(() => {
+    let highlightTimer;
+    const handleUndoRestored = (event) => {
+      const restoredTicketId = event.detail?.ticketId;
+      if (!restoredTicketId) return;
+      setHighlightTicketId(restoredTicketId);
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => setHighlightTicketId(null), 2200);
+    };
+    window.addEventListener('undo-restored', handleUndoRestored);
+    return () => {
+      window.removeEventListener('undo-restored', handleUndoRestored);
+      if (highlightTimer) clearTimeout(highlightTimer);
+    };
+  }, []);
+
+  // HIG Modality: only one dialog surface at a time — closing a popover when a modal opens.
+  useEffect(() => {
+    const isAnyDialogOpen = isConfirmingDelete || isConfirmingBulkDelete || (isConfirmingSubmit && !!pendingExport) || isReportModalOpen || isReallocateModalOpen || showWelcome;
+    if (isAnyDialogOpen) {
+      setShowInstructions(false);
+      setShowProfileSettings(false);
+    }
+  }, [isConfirmingDelete, isConfirmingBulkDelete, isConfirmingSubmit, pendingExport, isReportModalOpen, isReallocateModalOpen, showWelcome]);
+
   // --- Keyboard Handler ---
   useEffect(() => {
     actionHandlerRef.current = actionHandler;
@@ -684,9 +720,23 @@ ${combinedReport.trim()}
 
   if (!isAuthReady || !logsLoadedOnce) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
-        <Loader className="h-10 w-10 text-indigo-600 dark:text-indigo-400 animate-spin" />
-        <p className="ml-3 text-lg font-medium text-gray-700 dark:text-gray-300">Loading Tracker...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8" role="status" aria-busy="true">
+        <span className="sr-only">Loading Tracker…</span>
+        <div className="max-w-4xl mx-auto p-4 space-y-4 animate-pulse" aria-hidden="true">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-10 w-64 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div className="h-64 rounded-2xl bg-gray-200 dark:bg-gray-700" />
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="h-40 rounded-2xl bg-gray-200 dark:bg-gray-700" />
+            <div className="h-40 rounded-2xl bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div className="h-72 rounded-2xl bg-gray-200 dark:bg-gray-700" />
+        </div>
       </div>
     );
   }
@@ -710,7 +760,7 @@ ${combinedReport.trim()}
         <p className="text-red-600 dark:text-red-400 font-bold mb-2">This will delete the ticket and all its sessions.</p>
         <p>Are you sure you want to delete Ticket <strong>{ticketToDelete}</strong>?</p>
         {hasActiveTimer && (
-          <p className="mt-2 text-sm font-semibold text-amber-600 dark:text-amber-400">
+          <p className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
             This includes your currently active timer session.
           </p>
         )}
@@ -737,7 +787,7 @@ ${combinedReport.trim()}
           error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-50/80 dark:bg-gray-900/80" aria-busy="true"><Loader className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin" /><span className="sr-only">Loading…</span></div>}>
         <WelcomeModal isOpen={showWelcome} onClose={() => {
           setShowWelcome(false);
           try { localStorage.setItem(STORAGE_KEYS.HAS_VISITED, 'true'); } catch {}
@@ -821,7 +871,7 @@ ${combinedReport.trim()}
                       <p className="font-semibold text-gray-800 dark:text-gray-200">{user.displayName}</p>
                       <button
                         onClick={handleLogout}
-                        className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        className="flex items-center gap-1 text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                       >
                         <LogOut className="w-3.5 h-3.5" />
                         Log out
@@ -840,8 +890,10 @@ ${combinedReport.trim()}
               </div>
               <div>
                 <button
+                  ref={instructionsTriggerRef}
                   onClick={() => setShowInstructions(!showInstructions)}
                   aria-expanded={showInstructions}
+                  aria-haspopup="true"
                   className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                 >
                   <Info className="w-4 h-4" />
@@ -851,7 +903,7 @@ ${combinedReport.trim()}
             </div>
 
             {showInstructions && (
-              <section className="absolute z-10 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
+              <section ref={instructionsPanelRef} tabIndex={-1} role="region" aria-label="Instructions" className="absolute z-40 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800">
                 <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">How to Use This Tracker</h3>
                 <InstructionsContent />
                 <div className="mt-6 text-center">
@@ -869,16 +921,18 @@ ${combinedReport.trim()}
           <div className="flex items-center space-x-2">
             <div className="relative">
               <button
+                ref={profileTriggerRef}
                 onClick={() => setShowProfileSettings(!showProfileSettings)}
                 className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                aria-label="Report profile settings"
+                aria-label="Profile settings"
+                aria-haspopup="true"
                 aria-expanded={showProfileSettings}
-                title="Report profile settings"
+                title="Profile settings"
               >
                 <User className="w-5 h-5" />
               </button>
               {showProfileSettings && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                <div ref={profilePanelRef} tabIndex={-1} role="region" aria-label="Profile settings" className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-40">
                   <label htmlFor="user-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Your Title / Role
                   </label>
@@ -890,7 +944,7 @@ ${combinedReport.trim()}
                     placeholder="e.g., Senior Software Engineer"
                     className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used to personalize AI status reports</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Used to personalize AI status reports</p>
                 </div>
               )}
             </div>
@@ -907,7 +961,7 @@ ${combinedReport.trim()}
 
         <header className="text-center mb-10">
           <div className="flex flex-col justify-center items-center mb-2">
-            <h1 className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">TickTackToto</h1>
+            <h1 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">TickTackToto</h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">the slick ticket time tracker</p>
           </div>
         </header>
@@ -998,6 +1052,7 @@ ${combinedReport.trim()}
           loadMore={loadMore}
           hasActiveFilters={hasActiveFilters}
           onClearAllFilters={handleClearAllFilters}
+          highlightTicketId={highlightTicketId}
         />
       </div>
     </div>
