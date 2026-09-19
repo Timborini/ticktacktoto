@@ -5,7 +5,7 @@
  * Rate-limited client-side to avoid write amplification during error storms.
  */
 import { addDoc, collection } from 'firebase/firestore';
-import { dataAppId } from './firebase.js';
+import { dataAppId, appCheckEnabled } from './firebase.js';
 
 const MAX_PER_MINUTE = 5;
 
@@ -43,7 +43,9 @@ async function flushQueue() {
 
 export function reportError(error, { source = 'manual' } = {}) {
   if (import.meta.env.DEV) console.error(`[errorReporting:${source}]`, error);
-  if (!config?.db) return;
+  // Firestore rules enforce request.app != null on error_reports, so without
+  // App Check every write is guaranteed to fail — skip it entirely.
+  if (!config?.db || !appCheckEnabled) return;
 
   queue.push({
     message: truncate(error?.message || error, 2000),

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { query, onSnapshot } from 'firebase/firestore';
+import { query, onSnapshot, limit } from 'firebase/firestore';
+import { TICKET_STATUSES_QUERY_LIMIT } from '../constants.js';
 
 export function useTicketStatuses({ getTicketStatusCollectionRef }) {
   const [ticketStatuses, setTicketStatuses] = useState({});
@@ -8,7 +9,9 @@ export function useTicketStatuses({ getTicketStatusCollectionRef }) {
   useEffect(() => {
     if (!getTicketStatusCollectionRef) return;
 
-    const q = query(getTicketStatusCollectionRef);
+    // Bounded so the snapshot cannot grow unbounded with the number of
+    // distinct ticket IDs over the app's lifetime.
+    const q = query(getTicketStatusCollectionRef, limit(TICKET_STATUSES_QUERY_LIMIT));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setTicketStatuses((prev) => {

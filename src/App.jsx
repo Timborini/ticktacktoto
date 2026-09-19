@@ -922,7 +922,7 @@ ${combinedReport.trim()}
           isInputTicketClosed={isInputTicketClosed}
           currentNote={currentNote}
           setCurrentNote={setCurrentNote}
-          elapsedMs={timer.elapsedMs}
+          activeLogData={timer.activeLogData}
           onStart={(ticketId) => { timer.startNewOrOverride(ticketId); trackTicket(ticketId); }}
           onPause={timer.pauseTimer}
           onResume={timer.startOrResumeTimer}

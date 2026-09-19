@@ -14,6 +14,12 @@ export const BATCH_CHUNK_SIZE = 450;
 // Query limits
 export const LOGS_QUERY_LIMIT = 200;
 export const RANGED_LOGS_QUERY_LIMIT = 500;
+// Safety bound for the active-session query (endTime == null). A single
+// running session is expected; extra stale docs should never grow unbounded.
+export const ACTIVE_LOG_QUERY_LIMIT = 10;
+// Safety bound for the ticket-status listener so snapshot size cannot grow
+// unbounded with the number of distinct ticket IDs over time.
+export const TICKET_STATUSES_QUERY_LIMIT = 500;
 
 // Timer milestones (in milliseconds)
 export const TIMER_MILESTONES = [

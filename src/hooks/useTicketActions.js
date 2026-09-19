@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  doc, getDoc, updateDoc, deleteDoc, where, getDocs, setDoc, FieldPath, query
+  doc, getDoc, updateDoc, deleteDoc, where, getDocs, getCountFromServer, setDoc, FieldPath, query
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { sanitizeTicketId, sanitizeNote } from '../utils/helpers.js';
@@ -95,9 +95,12 @@ export function useTicketActions({
     setIsConfirmingDelete(true);
     if (!getCollectionRef) return;
     try {
-      const sessionsQuery = query(getCollectionRef, where('ticketId', '==', ticketId));
-      const snapshot = await getDocs(sessionsQuery);
-      setTicketDeleteCount(snapshot.size);
+      // Aggregate count instead of getDocs: counts every matching session
+      // without downloading the documents.
+      const countSnapshot = await getCountFromServer(
+        query(getCollectionRef, where('ticketId', '==', ticketId))
+      );
+      setTicketDeleteCount(countSnapshot.data().count);
     } catch (error) {
       if (import.meta.env.DEV) console.warn('Could not count ticket sessions:', error);
       setTicketDeleteCount(logs.filter((l) => l.ticketId === ticketId).length);
@@ -249,13 +252,16 @@ export function useTicketActions({
     try {
       const sessionIds = Array.from(selectedSessions);
       const previousStatuses = captureStatuses(sessionIds);
-      const updatePromises = sessionIds.map((sessionId) =>
-        updateDoc(doc(getCollectionRef, sessionId), {
+      // Batched writes instead of one updateDoc per session: ceil(n/450)
+      // round trips instead of n.
+      const operations = sessionIds.map((sessionId) => ({
+        ref: doc(getCollectionRef, sessionId),
+        data: {
           status: newStatus,
           submissionDate: newStatus === SESSION_STATUS.SUBMITTED ? Date.now() : null,
-        })
-      );
-      await Promise.all(updatePromises);
+        },
+      }));
+      await commitInChunks(db, operations);
       setSelectedSessions(new Set());
       const collectionRef = getCollectionRef;
       const submitHint = newStatus === SESSION_STATUS.SUBMITTED
@@ -273,7 +279,7 @@ export function useTicketActions({
     } finally {
       setIsActionLoading(false);
     }
-  }, [getCollectionRef, selectedSessions, captureStatuses, setSelectedSessions, setIsActionLoading]);
+  }, [getCollectionRef, selectedSessions, captureStatuses, setSelectedSessions, setIsActionLoading, db]);
 
   const handleOpenReallocate = useCallback((sessionId, ticketId) => {
     setReallocatingSessionInfo({ sessionId, currentTicketId: ticketId });

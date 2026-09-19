@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Play, Pause, Square, History, Clock, Keyboard, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatTime } from '../utils/helpers';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useElapsedClock } from '../hooks/useElapsedClock.js';
 import { STORAGE_KEYS, MAX_TICKET_ID_LENGTH } from '../constants.js';
 
 const TimerSection = ({
@@ -14,7 +15,7 @@ const TimerSection = ({
     isInputTicketClosed,
     currentNote,
     setCurrentNote,
-    elapsedMs,
+    activeLogData,
     onStart: propOnStart,
     onPause,
     onResume,
@@ -23,6 +24,9 @@ const TimerSection = ({
 }) => {
     const inputTicketId = currentTicketId.trim();
     const shouldReduceMotion = useReducedMotion();
+    // The ticking display lives here so the per-second update only re-renders
+    // TimerSection, not the whole App tree.
+    const elapsedMs = useElapsedClock({ isTimerRunning, isTimerPaused, activeLogData });
 
     const [showShortcuts, setShowShortcuts] = useState(() => {
         try {
