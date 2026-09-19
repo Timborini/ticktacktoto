@@ -7,7 +7,7 @@ const SHARE_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // Read validated filter values from the current URL (used as lazy initial state)
-function readFiltersFromUrl() {
+export function readFiltersFromUrl() {
   const urlParams = new URLSearchParams(window.location.search);
   const filters = { shareId: null, status: null, search: null, dateStart: null, dateEnd: null };
 
