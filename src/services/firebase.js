@@ -40,6 +40,7 @@ let app = null;
 let auth = null;
 let db = null;
 let googleProvider = null;
+let appCheckInitialized = false;
 
 if (isFirebaseConfigValid && dataAppIdIsValid) {
   try {
@@ -57,6 +58,7 @@ if (isFirebaseConfigValid && dataAppIdIsValid) {
           provider: new ReCaptchaV3Provider(import.meta.env.REACT_APP_RECAPTCHA_SITE_KEY),
           isTokenAutoRefreshEnabled: true,
         });
+        appCheckInitialized = true;
       } catch (e) {
         // App Check init failed — app continues, but Firestore loses bot
         // protection, so make it visible in production, not just dev.
@@ -71,4 +73,9 @@ if (isFirebaseConfigValid && dataAppIdIsValid) {
 }
 
 export { app, auth, db, googleProvider };
+
+// True when App Check is actually initialized. Firestore rules enforce
+// request.app != null on error_reports, so error reporting writes are
+// guaranteed to fail without it — skip them entirely in that case.
+export const appCheckEnabled = appCheckInitialized;
 

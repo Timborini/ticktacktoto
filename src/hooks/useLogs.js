@@ -11,6 +11,7 @@ import {
 import {
   LOGS_QUERY_LIMIT,
   RANGED_LOGS_QUERY_LIMIT,
+  ACTIVE_LOG_QUERY_LIMIT,
 } from '../constants.js';
 import { parseLocalDate } from '../utils/helpers.js';
 import toast from 'react-hot-toast';
@@ -129,7 +130,9 @@ export function useLogs({ getCollectionRef, dateRangeStart, dateRangeEnd }) {
       recompute();
     });
 
-    const activeQuery = query(getCollectionRef, where('endTime', '==', null));
+    // Bounded so stale paused sessions (data hygiene issues) cannot grow the
+    // snapshot unbounded; the most recent is picked below.
+    const activeQuery = query(getCollectionRef, where('endTime', '==', null), limit(ACTIVE_LOG_QUERY_LIMIT));
     const unsubscribeActive = onSnapshot(activeQuery, (snapshot) => {
       if (snapshot.docs.length > 1 && import.meta.env.DEV) {
         console.warn(`Found ${snapshot.docs.length} sessions with endTime == null; using the most recent.`);

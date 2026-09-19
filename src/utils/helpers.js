@@ -31,14 +31,17 @@ export const sanitizeTicketId = (ticketId) => {
 
 /**
  * Security: Sanitize note input to prevent XSS attacks.
- * CRITICAL: This allows most characters because we strictly rely on React's
- * automatic plain-text escaping. NEVER use dangerouslySetInnerHTML with this value.
+ * Also strips characters that Firestore rules reject (<, >, javascript:) so
+ * writes never fail at the rules layer. React's automatic plain-text escaping
+ * remains the primary XSS defense — NEVER use dangerouslySetInnerHTML.
  * @param {string} note - Raw note input
  * @returns {string} Sanitized note
  */
 export const sanitizeNote = (note) => {
   if (!note) return '';
   return note
+    .replace(/javascript\s*:/gi, '')
+    .replace(/[<>]/g, '')
     .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{M}\p{S}\n\r\t]/gu, '') // Allowlist approach
     .substring(0, 5000); // Limit length to prevent abuse
 };

@@ -12,7 +12,6 @@ import { MIN_SESSION_MS, TIMER_MILESTONES } from '../constants.js';
 export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId }) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
   const [runningLogDocId, setRunningLogDocId] = useState(null);
   const [activeLogData, setActiveLogData] = useState(null);
 
@@ -26,11 +25,9 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     if (log.startTime) {
       setIsTimerRunning(true);
       setIsTimerPaused(false);
-      setElapsedMs(log.accumulatedMs + (Date.now() - log.startTime));
     } else {
       setIsTimerRunning(false);
       setIsTimerPaused(true);
-      setElapsedMs(log.accumulatedMs);
     }
   }, []);
 
@@ -39,10 +36,11 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     setIsTimerPaused(false);
     setRunningLogDocId(null);
     setActiveLogData(null);
-    setElapsedMs(0);
   }, []);
 
-  // Timer interval
+  // Milestone loop: ticks each second while running and toasts milestones as
+  // they are crossed. The displayed elapsed time is rendered by
+  // useElapsedClock inside TimerSection so the tick never re-renders App.
   useEffect(() => {
     let interval = null;
     if (isTimerRunning && runningLogDocId && activeLogData?.startTime) {
@@ -52,10 +50,8 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
         TIMER_MILESTONES.filter((m) => initialElapsed >= m.ms).map((m) => m.label)
       );
 
-      const updateTimer = () => {
-        const currentRunDuration = Date.now() - activeLogData.startTime;
-        const newElapsedMs = activeLogData.accumulatedMs + currentRunDuration;
-        setElapsedMs(newElapsedMs);
+      const checkMilestones = () => {
+        const newElapsedMs = activeLogData.accumulatedMs + Math.max(0, Date.now() - activeLogData.startTime);
 
         for (const milestone of TIMER_MILESTONES) {
           if (newElapsedMs >= milestone.ms && !passedMilestonesRef.current.has(milestone.label)) {
@@ -68,8 +64,7 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
         }
       };
 
-      updateTimer();
-      interval = setInterval(updateTimer, 1000);
+      interval = setInterval(checkMilestones, 1000);
     } else {
       passedMilestonesRef.current = new Set();
     }
@@ -197,7 +192,6 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
   return useMemo(() => ({
     isTimerRunning,
     isTimerPaused,
-    elapsedMs,
     runningLogDocId,
     activeLogData,
     restoreSession,
@@ -207,5 +201,5 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     startNewSession,
     startOrResumeTimer,
     startNewOrOverride,
-  }), [isTimerRunning, isTimerPaused, elapsedMs, runningLogDocId, activeLogData, restoreSession, clearSession, pauseTimer, stopTimer, startNewSession, startOrResumeTimer, startNewOrOverride]);
+  }), [isTimerRunning, isTimerPaused, runningLogDocId, activeLogData, restoreSession, clearSession, pauseTimer, stopTimer, startNewSession, startOrResumeTimer, startNewOrOverride]);
 }

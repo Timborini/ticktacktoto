@@ -108,6 +108,14 @@ describe('user time_entries', () => {
   test('rejects an invalid status value', async () => {
     await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ status: 'approved' })));
   });
+
+  test('rejects entries with extra unknown fields', async () => {
+    await assertFails(setDoc(userEntryRef(ALICE, 'e1'), { ...validEntry(), extraField: 'nope' }));
+  });
+
+  test('rejects negative timestamps', async () => {
+    await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ startTime: -1000 })));
+  });
 });
 
 describe('public shares', () => {
@@ -136,7 +144,18 @@ describe('public shares', () => {
     await seedShare();
     await assertFails(setDoc(shareRef(BOB), { createdBy: ALICE, members: [BOB] }));
     await assertFails(setDoc(shareRef(BOB), { createdBy: BOB, members: [ALICE, BOB] }));
-    await assertSucceeds(setDoc(shareRef(BOB), { createdBy: ALICE, members: [ALICE, BOB, 'carol-uid'] }));
+    await assertFails(setDoc(shareRef(BOB), { createdBy: ALICE, members: [ALICE, BOB, 'carol-uid'] }));
+  });
+
+  test('only the owner can add members or update share metadata', async () => {
+    await seedShare();
+    await assertSucceeds(setDoc(shareRef(ALICE), { createdBy: ALICE, members: [ALICE, BOB, 'carol-uid'] }));
+  });
+
+  test('share creates and updates cannot carry extra fields', async () => {
+    await seedShare();
+    await assertFails(setDoc(shareRef(ALICE, 'share-x'), { createdBy: ALICE, members: [ALICE], extraField: 1 }));
+    await assertFails(setDoc(shareRef(ALICE), { createdBy: ALICE, members: [ALICE], extraField: 1 }));
   });
 
   test('only the owner can delete the share', async () => {
@@ -186,8 +205,12 @@ describe('error_reports', () => {
     createdAt: Date.now(),
   };
 
-  test('authenticated users can create valid reports', async () => {
-    await assertSucceeds(addDoc(errorReportRef(ALICE), validReport));
+  test('creates without App Check attestation are denied', async () => {
+    // Rules enforce request.app != null on error_reports. The Firestore
+    // emulator cannot simulate App Check (no token support in the testing
+    // library), so every emulator request has request.app == null and the
+    // create-allow path is exercised only in production.
+    await assertFails(addDoc(errorReportRef(ALICE), validReport));
   });
 
   test('reports cannot be read, updated, or deleted', async () => {
