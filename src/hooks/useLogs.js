@@ -38,7 +38,7 @@ export function toLog(doc) {
   };
 }
 
-function buildDateConstraints(dateRangeStart, dateRangeEnd) {
+export function buildDateConstraints(dateRangeStart, dateRangeEnd) {
   const constraints = [];
   const startDate = dateRangeStart ? parseLocalDate(dateRangeStart) : null;
   const endDate = dateRangeEnd ? parseLocalDate(dateRangeEnd) : null;

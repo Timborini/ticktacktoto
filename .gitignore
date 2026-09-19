@@ -28,3 +28,9 @@ antigravity_session_bc1efa12.md
 # Emulator artifacts
 firestore-debug.log
 firebase-debug.log
+
+# AI tooling configs (agent skills, permissions, session state)
+.agents/
+.claude/
+opencode.json
+skills-lock.json

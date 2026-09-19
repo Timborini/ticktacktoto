@@ -22,11 +22,15 @@
     Cross-Origin-Resource-Policy = "same-origin"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
-    # style-src 'unsafe-inline' is required by react-hot-toast. Consider replacing
-    # with a nonce-based policy once the toast library supports it.
+    # style-src 'unsafe-inline' is required by react-hot-toast (its goober
+    # runtime injects <style> tags). Removing it requires replacing the toast
+    # library with one that ships styles as a bundled CSS file. script-src is
+    # strict, so inline styles are not an XSS escalation path here.
     # Add a report-uri endpoint to monitor CSP violations in production.
     # https://app.netlify.com allowances are for the Netlify Drawer, which Netlify
     # injects into deploy previews only (not production).
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://*.firebaseio.com https://*.googleapis.com https://www.google.com https://www.gstatic.com; script-src-elem 'self' https://accounts.google.com https://apis.google.com https://*.firebaseio.com https://*.googleapis.com https://www.google.com https://www.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://www.google.com https://app.netlify.com; img-src 'self' https://www.gstatic.com https://lh3.googleusercontent.com https://app.netlify.com data:; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-src https://accounts.google.com https://*.firebaseapp.com https://www.google.com https://www.gstatic.com https://app.netlify.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+    # frame-src is pinned to the Firebase auth domain from .env (project
+    # time-tracker-9a56c) instead of the *.firebaseapp.com wildcard.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://*.firebaseio.com https://*.googleapis.com https://www.google.com https://www.gstatic.com; script-src-elem 'self' https://accounts.google.com https://apis.google.com https://*.firebaseio.com https://*.googleapis.com https://www.google.com https://www.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://www.google.com https://app.netlify.com; img-src 'self' https://www.gstatic.com https://lh3.googleusercontent.com https://app.netlify.com data:; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-src https://accounts.google.com https://time-tracker-9a56c.firebaseapp.com https://www.google.com https://www.gstatic.com https://app.netlify.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
 
 
