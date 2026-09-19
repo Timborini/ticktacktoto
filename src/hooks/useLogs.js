@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   query,
   onSnapshot,
@@ -186,12 +186,14 @@ export function useLogs({ getCollectionRef, dateRangeStart, dateRangeEnd }) {
 
   // Merge realtime first page with manually paginated older pages, deduped by id
   // (the realtime listener's version wins so fresh edits are reflected).
-  const allLogs = (() => {
+  // Memoized so downstream consumers (grouping, totals) don't recompute when
+  // this hook re-renders without new snapshot data.
+  const allLogs = useMemo(() => {
     const byId = new Map();
     extraLogs.forEach((log) => byId.set(log.id, log));
     logs.forEach((log) => byId.set(log.id, log));
     return Array.from(byId.values());
-  })();
+  }, [logs, extraLogs]);
 
   return {
     logs: allLogs,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   doc,
   updateDoc,
@@ -192,7 +192,9 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     await startNewSession(ticketId, '');
   }, [getCollectionRef, isTimerRunning, isTimerPaused, stopTimer, startNewSession, ticketStatuses]);
 
-  return {
+  // Memoized so consumers depending on the returned object don't see a new
+  // identity on every render (which would re-trigger effects every render).
+  return useMemo(() => ({
     isTimerRunning,
     isTimerPaused,
     elapsedMs,
@@ -205,5 +207,5 @@ export function useTimer({ getCollectionRef, currentNote, ticketStatuses, userId
     startNewSession,
     startOrResumeTimer,
     startNewOrOverride,
-  };
+  }), [isTimerRunning, isTimerPaused, elapsedMs, runningLogDocId, activeLogData, restoreSession, clearSession, pauseTimer, stopTimer, startNewSession, startOrResumeTimer, startNewOrOverride]);
 }

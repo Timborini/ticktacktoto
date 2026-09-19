@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { List, Check, RotateCcw, Trash2, Download, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
@@ -5,7 +6,9 @@ import TicketRow from './TicketRow';
 import ExportMenu from './ExportMenu';
 import { SESSION_STATUS } from '../constants.js';
 
-const SessionList = ({
+// memo: props are all stable references between meaningful changes, so the
+// per-second timer tick in App doesn't re-render the entire list.
+const SessionList = memo(function SessionList({
     logs,
     filteredAndGroupedLogs,
     selectedSessions,
@@ -26,6 +29,7 @@ const SessionList = ({
     exportFocusIndex,
     setExportFocusIndex,
     exportButtonRef,
+    closeExportMenu,
     isLoading,
     isActionDisabled,
     // TicketRow props
@@ -50,7 +54,7 @@ const SessionList = ({
     loadMore,
     hasActiveFilters,
     onClearAllFilters
-}) => {
+}) {
 
     const shouldReduceMotion = useReducedMotion();
 
@@ -169,7 +173,7 @@ const SessionList = ({
                         {exportOption === 'menu' && (
                             <ExportMenu
                                 isOpen={exportOption === 'menu'}
-                                onClose={() => { setExportOption(''); setExportFormat(''); setExportFocusIndex(0); }}
+                                onClose={closeExportMenu}
                                 buttonRef={exportButtonRef}
                                 onChooseFormat={(fmt) => { setExportFormat(fmt); setExportFocusIndex(0); }}
                                 onExportScope={(scope) => {
@@ -294,6 +298,6 @@ const SessionList = ({
 
         </section>
     );
-};
+});
 
 export default SessionList;

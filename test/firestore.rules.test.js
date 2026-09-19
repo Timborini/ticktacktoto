@@ -93,6 +93,18 @@ describe('user time_entries', () => {
     await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ accumulatedMs: 86400000 * 30 })));
   });
 
+  test('rejects a startTime beyond the far-future epoch cap', async () => {
+    await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ startTime: 4102444800000 + 60000 })));
+  });
+
+  test('rejects an endTime beyond the far-future epoch cap', async () => {
+    await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ endTime: 4102444800000 + 60000 })));
+  });
+
+  test('allows a slightly future startTime (clock skew is tolerated)', async () => {
+    await assertSucceeds(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ startTime: Date.now() + 10 * 60 * 1000 })));
+  });
+
   test('rejects an invalid status value', async () => {
     await assertFails(setDoc(userEntryRef(ALICE, 'e1'), validEntry({ status: 'approved' })));
   });

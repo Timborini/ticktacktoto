@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Pencil, Check, Repeat, Play, Lock, CornerUpRight, Trash2, BookOpen, Clock, Calendar } from 'lucide-react';
-import { format } from './formatters';
+import { formatTime, formatDateShort } from '../utils/helpers.js';
 
 const TicketRow = memo(function TicketRow({
   group,
@@ -118,7 +118,7 @@ const TicketRow = memo(function TicketRow({
           <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
             <Clock className="w-4 h-4 text-gray-400" />
             <span className="font-mono font-bold text-lg">
-              {format.duration(group.totalDurationMs)}
+              {formatTime(group.totalDurationMs)}
             </span>
           </div>
 
@@ -180,7 +180,7 @@ const TicketRow = memo(function TicketRow({
               <div className="flex-1 min-w-0 flex items-start gap-3">
                 <input
                   type="checkbox"
-                  aria-label={`Select session from ${format.dateShort(session.endTime)}`}
+                  aria-label={`Select session from ${formatDateShort(session.endTime)}`}
                   checked={selectedSessions?.has(session.id) || false}
                   onChange={() => onToggleSelectSession(session.id)}
                   className="h-4 w-4 mt-1 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
@@ -245,11 +245,11 @@ const TicketRow = memo(function TicketRow({
                 <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                     <Clock className="w-3 h-3" />
-                    {format.duration(session.accumulatedMs)}
+                    {formatTime(session.accumulatedMs)}
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    {format.dateShort(session.endTime)}
+                    {formatDateShort(session.endTime)}
                   </span>
                 </div>
 
